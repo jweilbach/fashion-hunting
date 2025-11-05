@@ -1,0 +1,38 @@
+# TikTok searches configuration
+# Supports three types of searches: hashtag, keyword, and user
+
+tiktok_searches:
+  # Search by hashtag
+  - type: hashtag
+    value: glossier
+    count: 50
+  
+  - type: hashtag
+    value: maybelline
+    count: 50
+  
+  - type: hashtag
+    value: targetbeauty
+    count: 30
+  
+  # Search by keyword (broader search)
+  - type: keyword
+    value: "Coors Light"
+    count: 30
+  
+  - type: keyword
+    value: "Doritos Super Bowl"
+    count: 30
+  
+  # Search by user (brand's official account)
+  - type: user
+    value: glossier
+    count: 30
+  
+  - type: user
+    value: maybelline
+    count: 30
+  
+  - type: user
+    value: target
+    count: 20

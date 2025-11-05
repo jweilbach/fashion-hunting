@@ -1,0 +1,64 @@
+# Updated settings.yaml with provider configuration
+sheet_id: "1JlHA4jdK5dflNe5Kr9yflZVR-BkRoVTqpqHdRPkzrHk"
+worksheet_name: "fashion hunting"
+recap_max_items: 8
+slides_title: "ABMC – Earned Media Report (Month)"
+
+# Provider settings
+enable_rss: false      # Enable RSS feed scraping
+enable_tiktok: true  # Enable TikTok scraping (set to true to activate)
+
+# AI settings
+enable_ai_brand_extraction: true  # Extract brands from HTML using AI (RSS only)
+
+# Known brands to prioritize in analysis
+known_brands:
+  - Coors Light
+  - Doritos
+  - Glossier
+  - Maybelline
+  - Target
+  - Revlon
+  - CoverGirl
+  - Milk Makeup
+
+# Brands to ignore (platforms, common false positives)
+ignore_brand_exact:
+  - Roboto
+  - Material Icons
+  - Material Icons Extended
+  - Google Material Icons
+  - Product Sans
+  - Google Sans
+  - Google Sans Display
+  - Google News
+  - CNN
+  - TikTok
+  - Instagram
+  - Facebook
+  - Twitter
+  - Snapchat
+
+# Patterns to ignore (regex)
+ignore_brand_patterns:
+  - ".*\\bIcons?\\b$"
+  - "^Google$"
+  - "^https?://"
+  - "^[A-Z]\\d{2,}$"
+
+# Additional meta tags to extract (for RSS article parsing)
+extra_meta_names:
+  - parsely-description
+  - sailthru.description
+  - dc.description
+  - summary
+  - excerpt
+
+extra_meta_properties:
+  - article:summary
+  - twitter:text:title
+
+extra_itemprops:
+  - description
+  - headline
+  - alternativeHeadline

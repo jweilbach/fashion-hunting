@@ -1,0 +1,15 @@
+trafilatura
+readability-lxml
+beautifulsoup4
+lxml
+feedparser
+requests
+PyYAML
+python-dotenv
+tenacity
+gspread
+oauth2client
+
+# Optional: TikTok support (uncomment if you want to enable TikTok)
+TikTok-Api
+playwright

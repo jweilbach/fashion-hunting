@@ -1,0 +1,14 @@
+# Copy to settings.yaml and update
+sheet_id: "1JlHA4jdK5dflNe5Kr9yflZVR-BkRoVTqpqHdRPkzrHk"
+worksheet_name: "fashion hunting"
+recap_max_items: 8
+slides_title: "ABMC — Earned Media Report (Month)"
+known_brands:
+  - Coors Light
+  - Doritos
+  - Glossier
+  - Maybelline
+  - Target
+  - Revlon
+  - CoverGirl
+  - Milk Makeup

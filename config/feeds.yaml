@@ -1,0 +1,6 @@
+# Add/adjust feeds. You can paste Google Alerts RSS links here.
+feeds:
+  - "https://news.google.com/rss/search?q=Alison+Brod+Marketing"
+  - "https://news.google.com/rss/search?q='Glossier'+PR"
+  - "https://news.google.com/rss/search?q='Maybelline'+campaign"
+  - "https://news.google.com/rss/search?q='Target'+partnership"
