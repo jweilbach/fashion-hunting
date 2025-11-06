@@ -1,12 +1,15 @@
 # Updated settings.yaml with provider configuration
 sheet_id: "1JlHA4jdK5dflNe5Kr9yflZVR-BkRoVTqpqHdRPkzrHk"
-worksheet_name: "fashion hunting"
+worksheet_name: "fashionhunting"
 recap_max_items: 8
 slides_title: "ABMC – Earned Media Report (Month)"
 
+# Database settings
+tenant_id: "00000000-0000-0000-0000-000000000001"  # Default tenant ID
+
 # Provider settings
-enable_rss: false      # Enable RSS feed scraping
-enable_tiktok: true  # Enable TikTok scraping (set to true to activate)
+enable_rss: true      # Enable RSS feed scraping
+enable_tiktok: false  # Enable TikTok scraping (set to true to activate)
 
 # AI settings
 enable_ai_brand_extraction: true  # Extract brands from HTML using AI (RSS only)
