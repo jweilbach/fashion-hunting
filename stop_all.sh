@@ -63,8 +63,8 @@ kill_by_name() {
     fi
 }
 
-# Stop Frontend (Vite dev server on port 5173)
-kill_by_port 5173 "Frontend (Vite)"
+# Stop Frontend (Vite dev server on port 5174)
+kill_by_port 5174 "Frontend (Vite)"
 
 # Stop Backend API (FastAPI on port 8000)
 kill_by_port 8000 "Backend API (FastAPI)"

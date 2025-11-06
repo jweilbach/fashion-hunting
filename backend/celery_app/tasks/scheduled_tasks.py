@@ -147,6 +147,7 @@ def execute_scheduled_job(job_id: str) -> Dict[str, Any]:
     # Import content processing components
     from ai_client import AIClient
     from providers.rss_provider import RSSProvider
+    from fetch_and_report_db import fetch_full_article_text
     import os
     import time
     import random
@@ -251,12 +252,53 @@ def execute_scheduled_job(job_id: str) -> Dict[str, Any]:
             try:
                 logger.info(f"Processing item {idx+1}/{min(len(items), max_items)}: {item.get('title')}")
 
-                # Use AI to analyze the content
-                full_text = f"{item.get('title', '')}\n\n{item.get('raw_summary', '')}"
+                # Fetch full article text and HTML
+                logger.info(f"Fetching full article from: {item.get('link')}")
+                full_text, html_bytes = fetch_full_article_text(
+                    item.get("link", ""),
+                    item.get("title", ""),
+                    item.get("raw_summary", ""),
+                    extra_meta_names=[],
+                    extra_meta_properties=[],
+                    extra_itemprops=[],
+                    return_html=True
+                )
+
+                # Fallback to title + summary if fetch failed
+                if len(full_text) < 100:
+                    logger.warning(f"Full article fetch failed, using RSS summary only")
+                    full_text = f"{item.get('title', '')}\n\n{item.get('raw_summary', '')}"
+                    html_bytes = None
+
+                # Use AI to analyze the text content
+                logger.info(f"Analyzing article text ({len(full_text)} chars)")
                 analysis = ai_client.classify_summarize(full_text, brands)
 
-                # Get all brands mentioned (not just configured ones)
+                # Get brands from text analysis
                 mentioned_brands = analysis.get('brands', [])
+                logger.info(f"Text analysis extracted brands: {mentioned_brands}")
+
+                # Also extract brands from HTML if available
+                if html_bytes:
+                    logger.info(f"Extracting brands from HTML ({len(html_bytes)} bytes)")
+                    try:
+                        brands_from_html = ai_client.ai_extract_brands_from_raw_html(
+                            html_bytes,
+                            ignore_exact=[],
+                            ignore_patterns=[]
+                        )
+                        logger.info(f"HTML analysis extracted brands: {brands_from_html}")
+
+                        # Merge brands from both sources (avoid duplicates)
+                        seen = set(b.lower() for b in mentioned_brands)
+                        for b in brands_from_html:
+                            if b.lower() not in seen:
+                                mentioned_brands.append(b)
+                                seen.add(b.lower())
+
+                        logger.info(f"Combined brands after HTML merge: {mentioned_brands}")
+                    except Exception as html_error:
+                        logger.warning(f"HTML brand extraction failed: {html_error}")
 
                 # Generate dedupe_key from title + link
                 dedupe_content = f"{item.get('title', '')}{item.get('link', '')}"
