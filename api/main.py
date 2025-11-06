@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from api.config import settings
-from api.routers import auth, reports, brands, feeds, analytics
+from api.routers import auth, reports, brands, feeds, analytics, public
 
 # Create FastAPI app
 app = FastAPI(
@@ -97,6 +97,7 @@ async def root():
 
 
 # Include routers
+app.include_router(public.router, prefix="/api/v1/public", tags=["Public"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
 app.include_router(brands.router, prefix="/api/v1/brands", tags=["Brands"])

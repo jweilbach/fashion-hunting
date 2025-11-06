@@ -4,6 +4,7 @@ Configuration for FastAPI application
 import os
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
+from pydantic import model_validator
 
 load_dotenv()
 
@@ -50,11 +51,14 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
-    # CORS
-    ALLOWED_ORIGINS: list = os.getenv(
-        "ALLOWED_ORIGINS",
-        "http://localhost:3000,http://localhost:8501"
-    ).split(",")
+    # CORS - handle after initialization
+    ALLOWED_ORIGINS: list = []
+
+    @model_validator(mode='after')
+    def set_allowed_origins(self):
+        origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:8501")
+        self.ALLOWED_ORIGINS = [origin.strip() for origin in origins_str.split(",")]
+        return self
 
     # OpenAI
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
