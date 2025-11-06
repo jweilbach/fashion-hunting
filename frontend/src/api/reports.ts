@@ -30,8 +30,8 @@ export const reportsApi = {
   },
 
   // Get recent reports
-  getRecentReports: async (limit: number = 10): Promise<Report[]> => {
-    const response = await apiClient.get<Report[]>(`/api/v1/public/reports/recent?limit=${limit}`);
+  getRecentReports: async (limit: number = 10, skip: number = 0): Promise<PaginatedResponse<Report>> => {
+    const response = await apiClient.get<PaginatedResponse<Report>>(`/api/v1/public/reports/recent?limit=${limit}&skip=${skip}`);
     return response.data;
   },
 

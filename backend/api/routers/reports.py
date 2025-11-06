@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from api.database import get_db
 from api import schemas
-from api.auth import get_current_user, require_viewer
+from api.auth import get_current_user, require_viewer, require_editor
 from models.user import User
 from repositories.report_repository import ReportRepository
 
@@ -134,6 +134,7 @@ async def get_reports_by_brand(
 
 
 @router.patch("/{report_id}", response_model=schemas.Report)
+@router.put("/{report_id}", response_model=schemas.Report)
 async def update_report(
     report_id: UUID,
     report_update: schemas.ReportUpdate,
@@ -167,14 +168,10 @@ async def update_report(
 @router.delete("/{report_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_report(
     report_id: UUID,
-    current_user: User = Depends(require_viewer),
+    current_user: User = Depends(require_editor),
     db: Session = Depends(get_db)
 ):
-    """Delete a report"""
-    from api.auth import require_admin
-
-    # Only admins can delete
-    await require_admin(current_user)
+    """Delete a report (requires editor or admin role)"""
 
     repo = ReportRepository(db)
     report = repo.get_by_id(report_id)

@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from api.config import settings
-from api.routers import auth, reports, brands, feeds, analytics, public
+from api.routers import auth, reports, brands, feeds, analytics, public, jobs
 
 # Create FastAPI app
 app = FastAPI(
@@ -28,8 +28,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 
@@ -102,6 +104,7 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
 app.include_router(brands.router, prefix="/api/v1/brands", tags=["Brands"])
 app.include_router(feeds.router, prefix="/api/v1/feeds", tags=["Feeds"])
+app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["Jobs"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
 
 

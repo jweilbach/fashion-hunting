@@ -4,9 +4,14 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import Layout from './components/Layout';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
+import Brands from './pages/Brands';
+import Settings from './pages/Settings';
+import Tasks from './pages/Tasks';
+import History from './pages/History';
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -42,12 +47,54 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
 
-              {/* Protected routes */}
+              {/* Protected routes with Layout */}
               <Route
                 path="/dashboard"
                 element={
                   <ProtectedRoute>
-                    <Dashboard />
+                    <Layout>
+                      <Dashboard />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/brands"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Brands />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/settings"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Settings />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/tasks"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Tasks />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/history"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <History />
+                    </Layout>
                   </ProtectedRoute>
                 }
               />

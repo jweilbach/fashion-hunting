@@ -200,11 +200,15 @@ Text:
         brands_llm = self._extract_brands_from_payload(data)
         brands_rule = self._extract_brands_rule_based(fulltext, known_brands)
 
+        logging.info("LLM extracted brands: %s", brands_llm)
+        logging.info("Rule-based extracted brands: %s", brands_rule)
+
         seen, all_brands = set(), []
         for b in brands_rule + brands_llm:
             if b not in seen:
                 seen.add(b); all_brands.append(b)
 
+        logging.info("Combined brands (before filtering): %s", all_brands)
         data["brands"] = all_brands
         return data
 
@@ -219,10 +223,18 @@ Text:
 You are an information extraction model.
 From the following raw HTML fragment, extract a JSON array of brand/company/product names
 that a human reader would likely see (visible article content, meta descriptions/titles, schema JSON-LD names/brands/mentions).
+
+INCLUDE companies/brands when they are:
+- The subject of the article (e.g., "Refinery29 announces layoffs", "Alison Brod Marketing wins award")
+- Products, fashion/beauty brands, retailers being discussed
+- PR firms, agencies, or marketing companies mentioned in the content
+
 DO NOT include:
-- news outlets, publishers, or platforms (e.g., Google News, CNN)
+- News outlets ONLY when they are the source/byline (e.g., "Published by CNN")
 - UI fonts, icon sets, styles, or technical libraries (e.g., Roboto, Material Icons, Product Sans, Google Sans)
-- people names
+- People names
+- Generic terms like "the company", "the brand"
+
 Return ONLY:
 
 {{"brands": ["Brand A","Brand B", ...]}}

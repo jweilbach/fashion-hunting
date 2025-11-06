@@ -100,6 +100,7 @@ async def create_feed(
 
 
 @router.patch("/{feed_id}", response_model=schemas.FeedConfig)
+@router.put("/{feed_id}", response_model=schemas.FeedConfig)
 async def update_feed(
     feed_id: UUID,
     feed_update: schemas.FeedConfigUpdate,

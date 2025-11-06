@@ -227,14 +227,17 @@ class BrandConfig(BrandConfigBase):
 # ============================================================================
 
 class ScheduledJobBase(BaseModel):
-    job_type: str  # fetch_reports, send_digest, generate_slides
-    schedule_cron: str  # Cron expression
+    job_type: str  # monitor_feeds (main type for brand/feed monitoring)
+    schedule_cron: str  # Cron expression (e.g., "0 9 * * *" for daily at 9am, "@manual" for manual only)
     enabled: bool = True
-    config: Optional[Dict[str, Any]] = {}
+    config: Optional[Dict[str, Any]] = {}  # Contains: name, brand_ids[], feed_ids[]
 
 
-class ScheduledJobCreate(ScheduledJobBase):
-    tenant_id: UUID
+class ScheduledJobCreate(BaseModel):
+    job_type: str = "monitor_feeds"
+    schedule_cron: str  # Use "@manual" for manual-only tasks
+    enabled: bool = True
+    config: Dict[str, Any]  # Required: { name, brand_ids, feed_ids }
 
 
 class ScheduledJobUpdate(BaseModel):
@@ -252,6 +255,26 @@ class ScheduledJob(ScheduledJobBase):
     run_count: int = 0
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================================
+# Job Execution Schemas
+# ============================================================================
+
+class JobExecution(BaseModel):
+    id: UUID
+    job_id: UUID
+    tenant_id: UUID
+    started_at: datetime
+    completed_at: Optional[datetime] = None
+    status: str  # running, success, failed, partial
+    items_processed: int = 0
+    items_failed: int = 0
+    error_message: Optional[str] = None
+    execution_log: Optional[str] = None
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 

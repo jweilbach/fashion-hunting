@@ -750,19 +750,24 @@ Full context:
                     analysis = self.ai_client.classify_summarize(fulltext, self.known_brands)
 
                     # Extract and filter brands
-                    brands_list = analysis.get("brands", [])
-                    brands_list = _filter_brands(brands_list, self.ignore_brand_exact, self.ignore_brand_patterns)
+                    brands_raw = analysis.get("brands", [])
+                    logging.info("AI extracted %d brands from text: %s", len(brands_raw), brands_raw)
+                    brands_list = _filter_brands(brands_raw, self.ignore_brand_exact, self.ignore_brand_patterns)
+                    logging.info("After filtering: %d brands remain: %s", len(brands_list), brands_list)
 
                     # For RSS: try AI brand extraction from HTML if enabled
                     if provider_type == 'RSS' and html_bytes and self.settings.get("enable_ai_brand_extraction", True):
+                        logging.info("Starting HTML brand extraction (hybrid mode)...")
                         brands_ai = self.ai_client.ai_extract_brands_from_raw_html(
                             html_bytes, self.ignore_brand_exact, self.ignore_brand_patterns
                         )
+                        logging.info("HTML extraction found %d additional brands: %s", len(brands_ai), brands_ai)
                         seen = set(map(str.lower, brands_list))
                         for b in brands_ai:
                             if b.lower() not in seen:
                                 brands_list.append(b)
                                 seen.add(b.lower())
+                        logging.info("After HTML merge: %d total brands: %s", len(brands_list), brands_list)
 
                     # For TikTok: infer from username if no brands detected
                     if provider_type == 'TikTok' and not brands_list:
@@ -789,6 +794,7 @@ Full context:
                         sentiment=analysis.get("sentiment", "neutral"),
                         topic=analysis.get("topic", "lifestyle"),
                         est_reach=int(item.get('est_reach', analysis.get('est_reach', 0))),
+                        full_text=fulltext,  # Store full text for debugging
                         processing_status='completed',
                         raw_data={
                             'raw_summary': item.get('raw_summary', ''),

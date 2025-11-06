@@ -56,7 +56,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode='after')
     def set_allowed_origins(self):
-        origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:8501")
+        origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:8501")
         self.ALLOWED_ORIGINS = [origin.strip() for origin in origins_str.split(",")]
         return self
 

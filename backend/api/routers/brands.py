@@ -125,6 +125,7 @@ async def create_brand(
 
 
 @router.patch("/{brand_id}", response_model=schemas.BrandConfig)
+@router.put("/{brand_id}", response_model=schemas.BrandConfig)
 async def update_brand(
     brand_id: UUID,
     brand_update: schemas.BrandConfigUpdate,
