@@ -61,6 +61,10 @@ export interface JobExecution {
   items_failed: number;
   error_message?: string;
   execution_log?: string;
+  total_items: number;
+  current_item_index: number;
+  current_item_title?: string;
+  celery_task_id?: string;
   created_at: string;
 }
 

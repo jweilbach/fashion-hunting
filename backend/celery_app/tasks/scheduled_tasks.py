@@ -112,14 +112,15 @@ def test_task(message: str = "Hello from Celery!") -> Dict[str, Any]:
 
 
 
-@app.task(name='celery_app.tasks.scheduled_tasks.execute_scheduled_job')
-def execute_scheduled_job(job_id: str) -> Dict[str, Any]:
+@app.task(name='celery_app.tasks.scheduled_tasks.execute_scheduled_job', bind=True)
+def execute_scheduled_job(self, job_id: str) -> Dict[str, Any]:
     """
     Execute a specific scheduled job by loading its configuration from the database
 
     This task delegates to JobExecutionService for all business logic.
 
     Args:
+        self: Celery task instance (for updating state)
         job_id: UUID of the scheduled job to execute
 
     Returns:
@@ -132,7 +133,7 @@ def execute_scheduled_job(job_id: str) -> Dict[str, Any]:
     from ai_client import AIClient
     from services.job_execution_service import JobExecutionService
 
-    logger.info(f"Starting execution of scheduled job {job_id}")
+    logger.info(f"Starting execution of scheduled job {job_id} with task_id {self.request.id}")
 
     db = SessionLocal()
     try:
@@ -143,9 +144,9 @@ def execute_scheduled_job(job_id: str) -> Dict[str, Any]:
 
         ai_client = AIClient(api_key=openai_key)
 
-        # Create service and execute job
+        # Create service and execute job with task ID for progress tracking
         service = JobExecutionService(db, ai_client)
-        result = service.execute_job(UUID(job_id))
+        result = service.execute_job(UUID(job_id), task_id=self.request.id)
 
         return result.to_dict()
 

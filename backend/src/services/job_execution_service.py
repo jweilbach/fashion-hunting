@@ -83,12 +83,13 @@ class JobExecutionService:
         self.brand_repo = brand_repo or BrandRepository(db)
         self.report_repo = report_repo or ReportRepository(db)
 
-    def execute_job(self, job_id: UUID) -> JobExecutionResult:
+    def execute_job(self, job_id: UUID, task_id: Optional[str] = None) -> JobExecutionResult:
         """
         Execute a scheduled job
 
         Args:
             job_id: ID of the scheduled job to execute
+            task_id: Optional Celery task ID for progress tracking
 
         Returns:
             JobExecutionResult with execution status and details
@@ -105,7 +106,7 @@ class JobExecutionService:
                 )
 
             # Create execution record
-            execution = self._create_execution_record(job)
+            execution = self._create_execution_record(job, task_id)
 
             try:
                 # Extract configuration
@@ -118,12 +119,19 @@ class JobExecutionService:
                 # Fetch items from all feeds
                 items = self._fetch_items_from_feeds(feeds, config)
 
+                # Update total items count
+                max_items = config.get('max_items_per_run', 10)
+                total_items = min(len(items), max_items)
+                execution.total_items = total_items
+                self.db.commit()
+
                 # Process items
                 items_processed, items_failed = self._process_items(
                     items=items,
                     job=job,
                     config=config,
-                    brands=brands
+                    brands=brands,
+                    execution=execution
                 )
 
                 # Mark execution as complete
@@ -163,7 +171,7 @@ class JobExecutionService:
             logger.info(f"Executing job: {job.config.get('name', 'Unnamed')} for tenant {job.tenant_id}")
         return job
 
-    def _create_execution_record(self, job: ScheduledJob) -> JobExecution:
+    def _create_execution_record(self, job: ScheduledJob, task_id: Optional[str] = None) -> JobExecution:
         """Create job execution tracking record"""
         execution = self.execution_repo.create(
             job_id=job.id,
@@ -171,9 +179,10 @@ class JobExecutionService:
             started_at=datetime.now(timezone.utc),
             status='running',
             items_processed=0,
-            items_failed=0
+            items_failed=0,
+            celery_task_id=task_id
         )
-        logger.info(f"Created execution record {execution.id}")
+        logger.info(f"Created execution record {execution.id} with task_id {task_id}")
         return execution
 
     def _load_feeds(self, job: ScheduledJob, config: Dict) -> List[FeedConfig]:
@@ -304,7 +313,8 @@ class JobExecutionService:
         items: List[Dict],
         job: ScheduledJob,
         config: Dict,
-        brands: List[str]
+        brands: List[str],
+        execution: JobExecution
     ) -> Tuple[int, int]:
         """
         Process fetched items using appropriate processors
@@ -332,7 +342,15 @@ class JobExecutionService:
 
         for idx, item in enumerate(items_to_process):
             try:
-                logger.info(f"Processing item {idx+1}/{len(items_to_process)}: {item.get('title')}")
+                item_title = item.get('title', 'Untitled')
+                logger.info(f"Processing item {idx+1}/{len(items_to_process)}: {item_title}")
+
+                # Update progress in database
+                execution.current_item_index = idx + 1
+                execution.current_item_title = item_title[:500] if item_title else None
+                execution.items_processed = items_processed
+                execution.items_failed = items_failed
+                self.db.commit()
 
                 # Get or create processor
                 provider = item.get('provider')

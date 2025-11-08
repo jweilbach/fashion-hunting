@@ -274,6 +274,10 @@ class JobExecution(BaseModel):
     items_failed: int = 0
     error_message: Optional[str] = None
     execution_log: Optional[str] = None
+    total_items: int = 0
+    current_item_index: int = 0
+    current_item_title: Optional[str] = None
+    celery_task_id: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

@@ -157,6 +157,8 @@ async def run_job_now(
     """
     Manually trigger a job to run now (requires editor role)
     Returns 202 Accepted - job will be queued for execution
+
+    Prevents duplicate runs by checking if job is already running
     """
     job_repo = JobRepository(db)
     job = job_repo.get_by_id(job_id)
@@ -172,6 +174,26 @@ async def run_job_now(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
+        )
+
+    # Check if job is already running
+    if job.last_status == 'running':
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Job is already running. Please wait for the current execution to complete."
+        )
+
+    # Check for any running executions of this job
+    execution_repo = JobExecutionRepository(db)
+    running_executions = db.query(JobExecution).filter(
+        JobExecution.job_id == job_id,
+        JobExecution.status == 'running'
+    ).first()
+
+    if running_executions:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Job is already running. Please wait for the current execution to complete."
         )
 
     # Queue the job for execution via Celery

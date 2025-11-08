@@ -113,7 +113,7 @@ const History: React.FC = () => {
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h3">Execution History</Typography>
+        <Typography variant="h3">Reports</Typography>
       </Box>
 
       {(!executions || executions.length === 0) ? (
