@@ -15,4 +15,6 @@ cd backend
 
 # Start Celery worker with INFO logging
 echo "Starting Celery worker..."
-celery -A celery_app.celery worker --loglevel=info --concurrency=2
+LOG_FILE="$(pwd)/logs/celery_worker.log"
+echo "Logs writing to: $LOG_FILE"
+celery -A celery_app.celery worker --loglevel=info --concurrency=2 2>&1 | tee -a "$LOG_FILE"

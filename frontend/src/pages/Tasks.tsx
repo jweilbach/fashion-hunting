@@ -26,6 +26,10 @@ import {
   Select,
   MenuItem,
   OutlinedInput,
+  Divider,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import {
@@ -36,6 +40,7 @@ import {
   CheckCircle as EnabledIcon,
   Cancel as DisabledIcon,
   Schedule as ScheduleIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { jobsApi, type ScheduledJob, type ScheduledJobCreate } from '../api/jobs';
@@ -53,6 +58,13 @@ const Tasks: React.FC = () => {
     schedule_type: 'manual',
     custom_cron: '',
     enabled: true,
+    // Advanced settings
+    enable_html_brand_extraction: false,
+    max_html_size_bytes: 500000,
+    unlimited_html_size: false,
+    max_items_per_run: 10,
+    ignore_brand_exact: [] as string[],
+    ignore_brand_patterns: [] as string[],
   });
 
   const queryClient = useQueryClient();
@@ -117,6 +129,13 @@ const Tasks: React.FC = () => {
         schedule_type: scheduleType,
         custom_cron: scheduleType === 'custom' ? job.schedule_cron : '',
         enabled: job.enabled,
+        // Advanced settings
+        enable_html_brand_extraction: job.config?.enable_html_brand_extraction || false,
+        max_html_size_bytes: job.config?.max_html_size_bytes ?? 500000,
+        unlimited_html_size: job.config?.max_html_size_bytes === null,
+        max_items_per_run: job.config?.max_items_per_run || 10,
+        ignore_brand_exact: job.config?.ignore_brand_exact || [],
+        ignore_brand_patterns: job.config?.ignore_brand_patterns || [],
       });
     } else {
       setEditingJob(null);
@@ -127,6 +146,13 @@ const Tasks: React.FC = () => {
         schedule_type: 'manual',
         custom_cron: '',
         enabled: true,
+        // Advanced settings defaults
+        enable_html_brand_extraction: false,
+        max_html_size_bytes: 500000,
+        unlimited_html_size: false,
+        max_items_per_run: 10,
+        ignore_brand_exact: [],
+        ignore_brand_patterns: [],
       });
     }
     setOpen(true);
@@ -177,6 +203,12 @@ const Tasks: React.FC = () => {
         name: formData.name,
         brand_ids: formData.brand_ids,
         feed_ids: formData.feed_ids,
+        // Advanced settings
+        enable_html_brand_extraction: formData.enable_html_brand_extraction,
+        max_html_size_bytes: formData.unlimited_html_size ? null : formData.max_html_size_bytes,
+        max_items_per_run: formData.max_items_per_run,
+        ignore_brand_exact: formData.ignore_brand_exact,
+        ignore_brand_patterns: formData.ignore_brand_patterns,
       },
     };
 
@@ -188,6 +220,12 @@ const Tasks: React.FC = () => {
           name: formData.name,
           brand_ids: formData.brand_ids,
           feed_ids: formData.feed_ids,
+          // Advanced settings
+          enable_html_brand_extraction: formData.enable_html_brand_extraction,
+          max_html_size_bytes: formData.unlimited_html_size ? null : formData.max_html_size_bytes,
+          max_items_per_run: formData.max_items_per_run,
+          ignore_brand_exact: formData.ignore_brand_exact,
+          ignore_brand_patterns: formData.ignore_brand_patterns,
         },
       };
       updateMutation.mutate({ id: editingJob.id, data: updateData });
@@ -441,6 +479,100 @@ const Tasks: React.FC = () => {
               helperText="e.g., '0 9 * * *' for daily at 9:00 AM"
             />
           )}
+
+          {/* Advanced Settings */}
+          <Accordion sx={{ mt: 3 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography variant="subtitle1" fontWeight="medium">
+                Advanced Settings
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {/* Max Items Per Run */}
+                <TextField
+                  fullWidth
+                  label="Max Items Per Run"
+                  type="number"
+                  value={formData.max_items_per_run}
+                  onChange={(e) => setFormData({ ...formData, max_items_per_run: parseInt(e.target.value) || 10 })}
+                  helperText="Maximum number of items to process per execution"
+                  inputProps={{ min: 1, max: 100 }}
+                />
+
+                {/* HTML Brand Extraction */}
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.enable_html_brand_extraction}
+                      onChange={(e) => setFormData({ ...formData, enable_html_brand_extraction: e.target.checked })}
+                    />
+                  }
+                  label="Enable HTML Brand Extraction (Hybrid Processing)"
+                />
+                <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+                  Extract brands from raw HTML in addition to article text. More comprehensive but slower and uses more AI credits.
+                </Typography>
+
+                {/* HTML Size Limit */}
+                {formData.enable_html_brand_extraction && (
+                  <>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={formData.unlimited_html_size}
+                          onChange={(e) => setFormData({ ...formData, unlimited_html_size: e.target.checked })}
+                        />
+                      }
+                      label="Unlimited HTML Size"
+                    />
+
+                    {!formData.unlimited_html_size && (
+                      <TextField
+                        fullWidth
+                        label="Max HTML Size (bytes)"
+                        type="number"
+                        value={formData.max_html_size_bytes}
+                        onChange={(e) => setFormData({ ...formData, max_html_size_bytes: parseInt(e.target.value) || 500000 })}
+                        helperText="Maximum HTML size to process (default: 500000 = 500KB)"
+                        inputProps={{ min: 1000, step: 10000 }}
+                      />
+                    )}
+                  </>
+                )}
+
+                <Divider sx={{ my: 1 }} />
+
+                {/* Ignore Brand Exact */}
+                <TextField
+                  fullWidth
+                  label="Ignore Brands (Exact Match)"
+                  value={formData.ignore_brand_exact.join(', ')}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    ignore_brand_exact: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                  })}
+                  helperText="Comma-separated list of brand names to ignore (e.g., CNN, BBC)"
+                  multiline
+                  rows={2}
+                />
+
+                {/* Ignore Brand Patterns */}
+                <TextField
+                  fullWidth
+                  label="Ignore Brands (Regex Patterns)"
+                  value={formData.ignore_brand_patterns.join(', ')}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    ignore_brand_patterns: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                  })}
+                  helperText="Comma-separated regex patterns (e.g., .*News.*, .*Media.*)"
+                  multiline
+                  rows={2}
+                />
+              </Box>
+            </AccordionDetails>
+          </Accordion>
 
           <FormControlLabel
             control={

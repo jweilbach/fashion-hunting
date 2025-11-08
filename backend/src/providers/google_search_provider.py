@@ -129,7 +129,7 @@ class GoogleSearchProvider(ContentProvider):
                             "title": title,
                             "link": link,
                             "raw_summary": snippet,
-                            "provider": "Google Search",
+                            "provider": "GOOGLE_SEARCH",
                             "search_query": query,  # Track which query found this
                         }
 

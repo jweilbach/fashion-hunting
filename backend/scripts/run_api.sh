@@ -10,4 +10,6 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)/backend"
 
 # Run uvicorn from backend directory
 cd backend
-python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+LOG_FILE="$(pwd)/logs/api.log"
+echo "API logs writing to: $LOG_FILE"
+python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload 2>&1 | tee -a "$LOG_FILE"

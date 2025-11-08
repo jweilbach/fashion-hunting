@@ -17,6 +17,7 @@ from api import schemas
 from api.auth import require_viewer, require_editor, require_admin
 from models.user import User
 from models.job import ScheduledJob, JobExecution
+from repositories.job_repository import JobRepository, JobExecutionRepository
 from datetime import datetime
 
 router = APIRouter()
@@ -30,9 +31,8 @@ async def list_jobs(
     """
     List all scheduled jobs for the current user's tenant
     """
-    jobs = db.query(ScheduledJob).filter(
-        ScheduledJob.tenant_id == current_user.tenant_id
-    ).order_by(ScheduledJob.created_at.desc()).all()
+    job_repo = JobRepository(db)
+    jobs = job_repo.get_all(current_user.tenant_id)
 
     return [schemas.ScheduledJob.model_validate(job) for job in jobs]
 
@@ -44,7 +44,8 @@ async def get_job(
     db: Session = Depends(get_db)
 ):
     """Get a specific job by ID"""
-    job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
+    job_repo = JobRepository(db)
+    job = job_repo.get_by_id(job_id)
 
     if not job:
         raise HTTPException(
@@ -76,18 +77,14 @@ async def create_job(
     - **enabled**: Whether the job is enabled
     - **config**: Job configuration including name, brand_ids, feed_ids
     """
-    # Create job
-    job = ScheduledJob(
+    job_repo = JobRepository(db)
+    job = job_repo.create(
         tenant_id=current_user.tenant_id,
         job_type=job_data.job_type,
         schedule_cron=job_data.schedule_cron,
         enabled=job_data.enabled,
         config=job_data.config or {}
     )
-
-    db.add(job)
-    db.commit()
-    db.refresh(job)
 
     return schemas.ScheduledJob.model_validate(job)
 
@@ -101,7 +98,8 @@ async def update_job(
     db: Session = Depends(get_db)
 ):
     """Update a scheduled job (requires editor role)"""
-    job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
+    job_repo = JobRepository(db)
+    job = job_repo.get_by_id(job_id)
 
     if not job:
         raise HTTPException(
@@ -118,12 +116,7 @@ async def update_job(
 
     # Update fields
     update_data = job_update.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(job, field, value)
-
-    job.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(job)
+    job = job_repo.update(job_id, **update_data)
 
     return schemas.ScheduledJob.model_validate(job)
 
@@ -135,7 +128,8 @@ async def delete_job(
     db: Session = Depends(get_db)
 ):
     """Delete a scheduled job (requires admin role)"""
-    job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
+    job_repo = JobRepository(db)
+    job = job_repo.get_by_id(job_id)
 
     if not job:
         raise HTTPException(
@@ -150,8 +144,7 @@ async def delete_job(
             detail="Access denied"
         )
 
-    db.delete(job)
-    db.commit()
+    job_repo.delete(job_id)
     return None
 
 
@@ -165,7 +158,8 @@ async def run_job_now(
     Manually trigger a job to run now (requires editor role)
     Returns 202 Accepted - job will be queued for execution
     """
-    job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
+    job_repo = JobRepository(db)
+    job = job_repo.get_by_id(job_id)
 
     if not job:
         raise HTTPException(
@@ -204,9 +198,8 @@ async def list_all_executions(
     List all job executions for the current user's tenant
     Ordered by most recent first
     """
-    executions = db.query(JobExecution).filter(
-        JobExecution.tenant_id == current_user.tenant_id
-    ).order_by(JobExecution.started_at.desc()).limit(limit).all()
+    execution_repo = JobExecutionRepository(db)
+    executions = execution_repo.get_all(current_user.tenant_id, limit=limit)
 
     return [schemas.JobExecution.model_validate(execution) for execution in executions]
 
@@ -223,7 +216,8 @@ async def list_job_executions(
     Ordered by most recent first
     """
     # First verify the job exists and user has access
-    job = db.query(ScheduledJob).filter(ScheduledJob.id == job_id).first()
+    job_repo = JobRepository(db)
+    job = job_repo.get_by_id(job_id)
 
     if not job:
         raise HTTPException(
@@ -238,8 +232,7 @@ async def list_job_executions(
             detail="Access denied"
         )
 
-    executions = db.query(JobExecution).filter(
-        JobExecution.job_id == job_id
-    ).order_by(JobExecution.started_at.desc()).limit(limit).all()
+    execution_repo = JobExecutionRepository(db)
+    executions = execution_repo.get_by_job_id(job_id, limit=limit)
 
     return [schemas.JobExecution.model_validate(execution) for execution in executions]

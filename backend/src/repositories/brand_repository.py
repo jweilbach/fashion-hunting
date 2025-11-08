@@ -130,3 +130,21 @@ class BrandRepository:
         """Check if a brand is known"""
         brand = self.get_by_name(tenant_id, brand_name)
         return brand.is_known_brand if brand else False
+
+    def count(
+        self,
+        tenant_id: UUID,
+        known_only: bool = False,
+        category: Optional[str] = None
+    ) -> int:
+        """Count brand configs"""
+        from sqlalchemy import func
+        query = self.db.query(func.count(BrandConfig.id)).filter(BrandConfig.tenant_id == tenant_id)
+
+        if known_only:
+            query = query.filter(BrandConfig.is_known_brand == True)
+
+        if category:
+            query = query.filter(BrandConfig.category == category)
+
+        return query.scalar() or 0

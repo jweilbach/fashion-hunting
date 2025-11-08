@@ -243,19 +243,25 @@ HTML:
 {html_chunk}
 """.strip()
 
-        r = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type":"application/json"},
-            json={
-                "model": "gpt-4o-mini",
-                "messages": [{"role":"user","content":prompt}],
-                "temperature": 0.0,
-                "response_format": {"type": "json_object"},
-                "max_tokens": 220
-            },
-            timeout=120
-        )
-        r.raise_for_status()
+        try:
+            r = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type":"application/json"},
+                json={
+                    "model": "gpt-4o-mini",
+                    "messages": [{"role":"user","content":prompt}],
+                    "temperature": 0.0,
+                    "response_format": {"type": "json_object"},
+                    "max_tokens": 220
+                },
+                timeout=120
+            )
+            r.raise_for_status()
+        except HTTPError as e:
+            # Log detailed HTTP error information before retrying
+            logging.error(f"OpenAI API HTTP error: {e.response.status_code} - {e.response.text[:200]}")
+            raise
+
         content = r.json()["choices"][0]["message"]["content"]
         data = json.loads(self._extract_json_fenced(content))
         brands = self._coerce_str_list(data.get("brands"))
@@ -263,21 +269,49 @@ HTML:
 
     def ai_extract_brands_from_raw_html(self, html_bytes: Optional[bytes],
                                         ignore_exact: List[str],
-                                        ignore_patterns: List[str]) -> List[str]:
-        logging.info("extracting brands from html chunk")
+                                        ignore_patterns: List[str],
+                                        max_html_size: Optional[int] = 500000) -> List[str]:
+        """
+        Extract brands from raw HTML using AI chunk processing.
+
+        Args:
+            html_bytes: Raw HTML bytes
+            ignore_exact: List of brand names to filter out (exact match)
+            ignore_patterns: List of regex patterns to filter out brands
+            max_html_size: Maximum HTML size in bytes to process. Set to None to disable size limit. Default: 500KB
+
+        Returns:
+            List of extracted brand names
+        """
         if not html_bytes:
             return []
+
+        html_size = len(html_bytes)
+        logging.info(f"Extracting brands from HTML ({html_size:,} bytes)")
+
+        # Skip processing if HTML is too large (unless max_html_size is None)
+        if max_html_size is not None and html_size > max_html_size:
+            logging.warning(f"HTML size ({html_size:,} bytes) exceeds max ({max_html_size:,} bytes). Skipping HTML brand extraction.")
+            return []
+
         raw = html_bytes.decode(errors="ignore")
         chunks = self._chunk_text(raw, chunk_size=20000)
+        chunk_count = len(chunks)
+
+        logging.info(f"Processing {chunk_count} HTML chunks for brand extraction")
+
         agg, seen = [], set()
-        for ch in chunks:
+        for idx, ch in enumerate(chunks, 1):
             try:
                 out = self._ai_extract_brands_from_html_chunk(ch)
+                logging.debug(f"Chunk {idx}/{chunk_count}: Extracted {len(out)} brands")
             except Exception as e:
-                logging.warning("AI chunk extraction failed: %s", e)
+                logging.warning(f"AI chunk extraction failed for chunk {idx}/{chunk_count}: {e}")
                 continue
             for b in out:
                 key = (b or "").strip().lower()
                 if key and key not in seen:
                     seen.add(key); agg.append(b)
+
+        logging.info(f"Total brands extracted from HTML: {len(agg)}")
         return self._filter_brands(agg, ignore_exact=ignore_exact, ignore_patterns=ignore_patterns)

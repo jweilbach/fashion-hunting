@@ -478,11 +478,14 @@ def fetch_full_article_text(link: str, title: str, summary_clean: str,
     final_url = _resolve_final_url(link)
     logging.info("Final URL resolved: %s", final_url)
 
+    # Fetch HTML for article text extraction
     html = _fetch_full_html(final_url)
-    if html:
-        logging.info("Fetched HTML bytes: %d", len(html))
-    else:
+
+    if not html:
         logging.warning("Failed to fetch HTML for %s", final_url)
+    elif return_html:
+        # Only log HTML bytes when we're going to use it for brand extraction
+        logging.info("Fetched HTML bytes: %d", len(html))
 
     parts = []
     if title: parts.append(title.strip())
@@ -703,7 +706,8 @@ class FeedProcessor:
                         logging.info("Fetching full text: source=%s title=%r", item.get("source"), item.get("title"))
                         fulltext, html_bytes = fetch_full_article_text(
                             item.get("link", ""), item.get("title", ""), item.get("raw_summary", ""),
-                            self.extra_meta_names, self.extra_meta_properties, self.extra_itemprops, return_html=True
+                            self.extra_meta_names, self.extra_meta_properties, self.extra_itemprops,
+                            return_html=self.settings.get("enable_ai_brand_extraction", True)
                         )
 
                         if len(fulltext) < 100:
