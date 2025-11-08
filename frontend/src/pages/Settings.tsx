@@ -107,16 +107,18 @@ const Settings: React.FC = () => {
 
   const handleSubmit = () => {
     let feedValue = formData.feed_value;
+    let feedType = formData.feed_type;
 
     // If RSS feed and feed_type is keyword, convert to Google News RSS URL
     if (!editingFeed && formData.provider === 'RSS' && formData.feed_type === 'keyword') {
       const encodedQuery = encodeURIComponent(formData.feed_value);
       feedValue = `https://news.google.com/rss/search?q=${encodedQuery}`;
+      feedType = 'rss_url';
     }
 
     const submitData = {
       provider: formData.provider,
-      feed_type: formData.feed_type === 'keyword' && formData.provider === 'RSS' ? 'rss_url' : formData.feed_type,
+      feed_type: feedType,
       feed_value: feedValue,
       label: formData.label || undefined,
       enabled: formData.enabled,
@@ -146,6 +148,8 @@ const Settings: React.FC = () => {
     switch (provider.toLowerCase()) {
       case 'rss':
         return 'primary';
+      case 'google_search':
+        return 'success';
       case 'tiktok':
         return 'secondary';
       case 'instagram':
@@ -161,6 +165,11 @@ const Settings: React.FC = () => {
         return [
           { value: 'rss_url', label: 'RSS URL' },
           { value: 'keyword', label: 'Keyword (Google News)' },
+        ];
+      case 'GOOGLE_SEARCH':
+        return [
+          { value: 'brand_search', label: 'Brand Search' },
+          { value: 'keyword_search', label: 'Keyword Search' },
         ];
       case 'TikTok':
         return [
@@ -185,6 +194,7 @@ const Settings: React.FC = () => {
       ...formData,
       provider: newProvider,
       feed_type: feedTypes[0].value, // Set to first available feed type
+      fetch_count: newProvider === 'GOOGLE_SEARCH' ? 10 : 30, // Default 10 for Google Search, 30 for others
     });
   };
 
@@ -298,6 +308,7 @@ const Settings: React.FC = () => {
                 required
               >
                 <option value="RSS">RSS</option>
+                <option value="GOOGLE_SEARCH">Google Search</option>
                 <option value="TikTok">TikTok</option>
                 <option value="Instagram">Instagram</option>
               </TextField>
@@ -319,12 +330,16 @@ const Settings: React.FC = () => {
               </TextField>
               <TextField
                 fullWidth
-                label="Feed URL/Value"
+                label={formData.provider === 'GOOGLE_SEARCH' ? 'Search Query' : 'Feed URL/Value'}
                 value={formData.feed_value}
                 onChange={(e) => setFormData({ ...formData, feed_value: e.target.value })}
                 margin="normal"
                 required
-                helperText="RSS URL, hashtag, keyword, or username"
+                helperText={
+                  formData.provider === 'GOOGLE_SEARCH'
+                    ? 'Search query (e.g., "Versace news", "luxury fashion collaboration")'
+                    : 'RSS URL, hashtag, keyword, or username'
+                }
               />
             </>
           )}
@@ -348,7 +363,14 @@ const Settings: React.FC = () => {
             value={formData.fetch_count}
             onChange={(e) => setFormData({ ...formData, fetch_count: parseInt(e.target.value) || 30 })}
             margin="normal"
-            helperText="Number of items to fetch per run"
+            helperText={
+              formData.provider === 'GOOGLE_SEARCH'
+                ? 'Results per query (max 10, uses API quota)'
+                : 'Number of items to fetch per run'
+            }
+            slotProps={{
+              htmlInput: formData.provider === 'GOOGLE_SEARCH' ? { min: 1, max: 10 } : {}
+            }}
           />
           <FormControlLabel
             control={

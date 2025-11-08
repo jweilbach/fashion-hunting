@@ -147,6 +147,7 @@ def execute_scheduled_job(job_id: str) -> Dict[str, Any]:
     # Import content processing components
     from ai_client import AIClient
     from providers.rss_provider import RSSProvider
+    from providers.google_search_provider import GoogleSearchProvider
     from fetch_and_report_db import fetch_full_article_text
     import os
     import time
@@ -226,22 +227,65 @@ def execute_scheduled_job(job_id: str) -> Dict[str, Any]:
         ai_client = AIClient(api_key=openai_key)
         report_repo = ReportRepository(db)
 
-        # Prepare RSS feed URLs (filter for RSS provider only for now)
+        # Separate feeds by provider type
         rss_feed_urls = [f.feed_value for f in feeds if f.provider.upper() == 'RSS']
+        google_search_feeds = [f for f in feeds if f.provider.upper() == 'GOOGLE_SEARCH']
 
-        if not rss_feed_urls:
+        logger.info(f"Found {len(rss_feed_urls)} RSS feeds and {len(google_search_feeds)} Google Search feeds")
+
+        # Collect items from all providers
+        items = []
+
+        # Process RSS feeds
+        if rss_feed_urls:
+            logger.info(f"Processing {len(rss_feed_urls)} RSS feeds")
+            rss_provider = RSSProvider(rss_feed_urls)
+            rss_items = rss_provider.fetch_items()
+            items.extend(rss_items)
+            logger.info(f"Fetched {len(rss_items)} items from RSS feeds")
+
+        # Process Google Search feeds
+        if google_search_feeds:
+            try:
+                # Extract search queries from feed configurations
+                search_queries = []
+                for feed in google_search_feeds:
+                    # feed_value contains the search query for Google Search provider
+                    query = feed.feed_value
+                    if query:
+                        search_queries.append(query)
+
+                if search_queries:
+                    logger.info(f"Processing {len(search_queries)} Google Search queries")
+
+                    # Get optional configuration from job config
+                    google_config = config.get('google_search', {})
+                    results_per_query = google_config.get('results_per_query', 10)
+                    date_restrict = google_config.get('date_restrict', 'd7')  # Last 7 days
+
+                    google_provider = GoogleSearchProvider(
+                        search_queries=search_queries,
+                        results_per_query=results_per_query,
+                        date_restrict=date_restrict
+                    )
+                    google_items = google_provider.fetch_items()
+                    items.extend(google_items)
+                    logger.info(f"Fetched {len(google_items)} items from Google Search")
+            except ValueError as ve:
+                logger.warning(f"Google Search provider not configured: {ve}")
+            except ImportError as ie:
+                logger.warning(f"Google Search provider dependencies not installed: {ie}")
+            except Exception as ge:
+                logger.error(f"Error fetching Google Search results: {ge}", exc_info=True)
+
+        if not items:
             execution.status = 'failed'
-            execution.error_message = 'No RSS feeds configured (only RSS supported currently)'
+            execution.error_message = 'No items fetched from any provider'
             execution.completed_at = datetime.now(timezone.utc)
             db.commit()
-            return {'status': 'error', 'message': 'No RSS feeds configured'}
+            return {'status': 'error', 'message': 'No items fetched'}
 
-        logger.info(f"Processing {len(rss_feed_urls)} RSS feeds")
-
-        # Create RSS provider and fetch items
-        rss_provider = RSSProvider(rss_feed_urls)
-        items = rss_provider.fetch_items()
-        logger.info(f"Fetched {len(items)} items from RSS feeds")
+        logger.info(f"Total items fetched from all providers: {len(items)}")
 
         # Process items (limit to avoid long execution)
         max_items = config.get('max_items_per_run', 10)
@@ -306,11 +350,14 @@ def execute_scheduled_job(job_id: str) -> Dict[str, Any]:
 
                 # Create report in database
                 try:
+                    # Get provider from item (set by the provider class)
+                    provider = item.get('provider', 'RSS')
+
                     report_repo.create(
                         tenant_id=job.tenant_id,
                         dedupe_key=dedupe_key,
-                        source=item.get('source', 'RSS'),
-                        provider='RSS',
+                        source=item.get('source', provider),
+                        provider=provider,
                         brands=mentioned_brands,
                         title=item.get('title', ''),
                         link=item.get('link', ''),

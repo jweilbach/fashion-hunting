@@ -63,17 +63,18 @@ kill_by_name() {
     fi
 }
 
-# Stop Frontend (Vite dev server on port 5174)
-kill_by_port 5174 "Frontend (Vite)"
+# Stop Frontend (Vite dev server on port 5173)
+kill_by_port 5173 "Frontend (Vite)"
 
 # Stop Backend API (FastAPI on port 8000)
 kill_by_port 8000 "Backend API (FastAPI)"
 
-# Stop Celery worker
-kill_by_name "celery.*worker" "Celery Worker"
+# Stop Celery worker (match both "celery worker" and "celery -A" patterns)
+kill_by_name "celery" "Celery Worker"
 
-# Stop Celery beat (if running)
-kill_by_name "celery.*beat" "Celery Beat"
+# Stop any remaining Python processes from run scripts
+kill_by_name "run_celery_worker.sh" "Celery Worker Script"
+kill_by_name "run_api.sh" "API Script"
 
 # Optional: Stop PostgreSQL (uncomment if you want to stop the database too)
 # echo -e "${YELLOW}Stopping PostgreSQL...${NC}"
