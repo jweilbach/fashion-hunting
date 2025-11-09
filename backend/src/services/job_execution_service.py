@@ -258,45 +258,63 @@ class JobExecutionService:
         return items
 
     def _fetch_from_rss(self, feeds: List[FeedConfig]) -> List[Dict]:
-        """Fetch items from RSS feeds"""
+        """Fetch items from RSS feeds, respecting each feed's fetch_count limit"""
         logger.info(f"Processing {len(feeds)} RSS feeds")
 
-        rss_urls = [f.feed_value for f in feeds]
-        provider = RSSProvider(rss_urls)
-        items = provider.fetch_items()
+        all_items = []
+        for feed in feeds:
+            logger.info(f"Fetching RSS feed: {feed.label or feed.feed_value} (limit: {feed.fetch_count} items)")
 
-        logger.info(f"Fetched {len(items)} items from RSS feeds")
-        return items
+            # Fetch items for this specific feed
+            provider = RSSProvider([feed.feed_value])
+            feed_items = provider.fetch_items()
+
+            # Limit to fetch_count for this feed
+            limited_items = feed_items[:feed.fetch_count]
+            logger.info(f"Fetched {len(feed_items)} items, keeping {len(limited_items)} items from feed: {feed.label or feed.feed_value}")
+
+            all_items.extend(limited_items)
+
+        logger.info(f"Total items fetched from {len(feeds)} RSS feeds: {len(all_items)}")
+        return all_items
 
     def _fetch_from_google_search(
         self,
         feeds: List[FeedConfig],
         config: Dict
     ) -> List[Dict]:
-        """Fetch items from Google Search feeds"""
+        """Fetch items from Google Search feeds, respecting each feed's fetch_count limit"""
         try:
-            # Extract search queries
-            search_queries = [f.feed_value for f in feeds if f.feed_value]
-
-            if not search_queries:
+            if not feeds:
                 return []
 
-            logger.info(f"Processing {len(search_queries)} Google Search queries")
+            logger.info(f"Processing {len(feeds)} Google Search feeds")
 
-            # Get optional Google Search configuration
+            # Get optional Google Search configuration for date restriction
             google_config = config.get('google_search', {})
-            results_per_query = google_config.get('results_per_query', 10)
             date_restrict = google_config.get('date_restrict', 'd7')
 
-            provider = GoogleSearchProvider(
-                search_queries=search_queries,
-                results_per_query=results_per_query,
-                date_restrict=date_restrict
-            )
-            items = provider.fetch_items()
+            all_items = []
+            for feed in feeds:
+                if not feed.feed_value:
+                    continue
 
-            logger.info(f"Fetched {len(items)} items from Google Search")
-            return items
+                logger.info(f"Fetching Google Search: {feed.label or feed.feed_value} (limit: {feed.fetch_count} items)")
+
+                # Fetch items for this specific feed
+                # Use feed.fetch_count as results_per_query for this feed
+                provider = GoogleSearchProvider(
+                    search_queries=[feed.feed_value],
+                    results_per_query=feed.fetch_count,
+                    date_restrict=date_restrict
+                )
+                feed_items = provider.fetch_items()
+
+                logger.info(f"Fetched {len(feed_items)} items from Google Search: {feed.label or feed.feed_value}")
+                all_items.extend(feed_items)
+
+            logger.info(f"Total items fetched from {len(feeds)} Google Search feeds: {len(all_items)}")
+            return all_items
 
         except ValueError as ve:
             logger.warning(f"Google Search provider not configured: {ve}")

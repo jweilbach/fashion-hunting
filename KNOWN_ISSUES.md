@@ -4,7 +4,107 @@ This document tracks known issues, limitations, and planned features for the Mar
 
 ## Known Issues
 
-### 1. Duplicate Logging with Celery Multiprocessing
+### 1. Selenium Timeout Blocking Job Execution
+**Status**: Fixed
+**Priority**: High
+**Date Identified**: 2025-11-08
+**Date Fixed**: 2025-11-08
+
+**Description**:
+When Selenium attempts to resolve Google News redirect URLs, it can timeout for up to 6 minutes per article (120 seconds × 3 retries), completely blocking job execution. This happens when Google News provides redirect URLs that are slow or broken.
+
+**Examples**:
+```
+2025-11-08 20:51:40 | INFO  | Resolving link https://news.google.com/rss/articles/CBMi-wFBVV95cUxPMWVNVS1iOTJV...
+2025-11-08 20:52:59 | WARNING | Retrying (Retry(total=2...)) after connection broken by 'ReadTimeoutError(...Read timed out. (read timeout=120)')
+2025-11-08 20:54:59 | WARNING | Retrying (Retry(total=1...)) after connection broken by 'ReadTimeoutError(...Read timed out. (read timeout=120)')
+2025-11-08 20:56:59 | WARNING | Retrying (Retry(total=0...)) after connection broken by 'ReadTimeoutError(...Read timed out. (read timeout=120)')
+2025-11-08 20:57:00 | INFO  | Selenium resolver error: HTTPConnectionPool(host='localhost'...): Max retries exceeded
+```
+
+**Impact**:
+- Jobs can take 6+ minutes per problematic article instead of seconds
+- Blocks both Celery workers when 2 jobs hit bad URLs simultaneously
+- No progress updates during timeout (appears frozen to user)
+- Affects multiple different articles from different publishers (Refinery29, Page Six, etc.)
+- Problem is intermittent - depends on which articles Google News returns
+
+**Root Cause**:
+1. Selenium's underlying urllib3 HTTP client has a default 120-second read timeout
+2. Selenium automatically retries 3 times on timeout (3 × 120s = 360s = 6 minutes max)
+3. The `driver.set_page_load_timeout(25)` only controls page load events, not HTTP connection timeouts
+4. Google News redirects are unreliable - some redirect URLs hang indefinitely
+5. No way to configure urllib3 timeout directly through Selenium's API
+
+**Observed Pattern**:
+- Earlier jobs (before 20:21) completed successfully in 1-2 minutes
+- Problem started when specific articles appeared in Google News RSS feed
+- Different articles cause timeouts at different times
+- Same article URL can timeout repeatedly across multiple job runs
+
+**Potential Solutions**:
+
+1. **Reduce Selenium HTTP timeout** (Quick fix - High priority)
+   - Monkey-patch urllib3 adapter to reduce timeout from 120s to 10-15s
+   - Add custom HTTP adapter with shorter timeout to Selenium driver
+   - Pros: Fast to implement, solves immediate problem
+   - Cons: Hacky, might break with Selenium updates
+   - **Code location**: `backend/src/fetch_and_report_db.py:280-343` (Selenium resolver function)
+
+2. **Skip Selenium for slow URLs** (Medium-term fix)
+   - Attempt HTTP resolution first with short timeout (5s)
+   - Only use Selenium as last resort
+   - Add timeout wrapper around Selenium call
+   - Pros: Cleaner, faster for most URLs
+   - Cons: Requires refactoring URL resolution logic
+
+3. **Async/concurrent URL resolution** (Long-term fix)
+   - Use asyncio to resolve URLs concurrently with timeout
+   - Process multiple articles simultaneously within single worker
+   - Pros: Much faster overall, better resource utilization
+   - Cons: Major refactoring required
+
+4. **Circuit breaker pattern** (Production-ready)
+   - Track failed URLs and skip Selenium after N failures
+   - Cache known-bad redirect URLs temporarily
+   - Pros: Prevents repeated timeouts on same URLs
+   - Cons: Requires state management
+
+**Fix Applied**:
+Implemented dual timeout configuration to prevent 6-minute hangs:
+
+```python
+# Lines 317-324 in backend/src/fetch_and_report_db.py
+
+# Set page load timeout to 30 seconds
+# This controls how long Selenium waits for the page to load
+driver.set_page_load_timeout(30)
+
+# Configure HTTP timeout for the underlying urllib3 connection
+# This prevents 120-second HTTP timeouts that cause 6-minute hangs
+if hasattr(driver, 'command_executor') and hasattr(driver.command_executor, '_client_config'):
+    driver.command_executor._client_config.timeout = 30
+```
+
+**Result**:
+- Page load timeouts now occur at 30 seconds instead of hanging indefinitely
+- HTTP connection timeouts reduced from 120 seconds to 30 seconds
+- Maximum timeout per article: ~30 seconds (vs 6 minutes before)
+- Jobs complete much faster, no more multi-minute hangs
+
+**Testing**:
+Logs show successful 30-second timeout:
+```
+Selenium resolver error: Message: timeout: Timed out receiving message from renderer: 30.000
+```
+
+**Related Files**:
+- `backend/src/fetch_and_report_db.py:317-324` (Selenium resolver with timeout config)
+- `backend/src/services/article_processor.py` (calls URL resolution)
+
+---
+
+### 2. Duplicate Logging with Celery Multiprocessing
 **Status**: Known Limitation
 **Priority**: Medium
 **Date Identified**: 2025-11-08
@@ -67,7 +167,174 @@ Implement Redis-based logging when ready to scale, or adopt a managed logging se
 
 ---
 
-### 2. Stuck Job Executions After Server Shutdown
+### 3. No Visual Confirmation After Job Settings Update
+**Status**: UX Issue
+**Priority**: Low
+**Date Identified**: 2025-11-08
+
+**Description**:
+When a user updates job settings (configuration, feed selection, brand selection, etc.) and clicks "Save", there is no visual confirmation that the settings were successfully saved. The modal/dialog simply closes without feedback, leaving users uncertain whether the changes were applied.
+
+**Impact**:
+- Users unsure if their changes were saved
+- No distinction between "Save" and "Cancel" actions from a UX perspective
+- Users may try to save multiple times out of uncertainty
+- Poor user experience, especially for critical configuration changes
+
+**Current Behavior**:
+1. User clicks "Edit" on a job
+2. User modifies settings (feeds, brands, schedule, etc.)
+3. User clicks "Save"
+4. Modal closes immediately with no feedback
+
+**Desired Behavior**:
+1. User clicks "Save"
+2. Show visual feedback:
+   - Success toast/snackbar: "Job settings updated successfully"
+   - Brief loading indicator during save operation
+   - Optionally show what was changed (e.g., "Updated 3 feeds and 5 brands")
+3. Modal closes after confirmation is shown
+4. Updated job reflects changes in the UI immediately
+
+**Acceptance Criteria**:
+- [ ] Show success toast/snackbar after successful job update
+- [ ] Show error toast if update fails with specific error message
+- [ ] Add loading state to "Save" button during API call
+- [ ] Disable "Save" button while request is in progress
+- [ ] Auto-dismiss success message after 3-5 seconds
+- [ ] Keep error messages visible until user dismisses them
+- [ ] Apply same pattern to Feed settings updates
+- [ ] Apply same pattern to Brand settings updates
+
+**Implementation Options**:
+1. **Material-UI Snackbar** (Recommended)
+   - Non-intrusive notification at bottom of screen
+   - Auto-dismisses after timeout
+   - Consistent with Material Design patterns
+
+2. **Inline success message**
+   - Show checkmark icon with "Saved!" text in modal before closing
+   - Delay modal close by 1-2 seconds to show confirmation
+
+3. **Toast notification library**
+   - Use react-toastify or similar for richer notifications
+   - Supports success/error/warning states
+
+**Related Files**:
+- `frontend/src/pages/Jobs.tsx` (job editing modal)
+- `frontend/src/pages/Feeds.tsx` (feed editing modal)
+- `frontend/src/pages/Tasks.tsx` (task/job management)
+- May need to add notification component/context
+
+**Example Code**:
+```typescript
+// Using Material-UI Snackbar
+const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+const handleSaveJob = async () => {
+  try {
+    setLoading(true);
+    await updateJob(jobId, jobData);
+    setSnackbar({ open: true, message: 'Job settings updated successfully', severity: 'success' });
+    handleClose();
+  } catch (error) {
+    setSnackbar({ open: true, message: `Failed to update job: ${error.message}`, severity: 'error' });
+  } finally {
+    setLoading(false);
+  }
+};
+```
+
+---
+
+### 4. No Visual Indicator for Failed URL Resolution
+**Status**: UX/Data Quality Issue
+**Priority**: Medium
+**Date Identified**: 2025-11-08
+
+**Description**:
+When Selenium fails to resolve a Google News redirect URL (timeout, error, etc.), the article is still saved to the reports table but with the unresolved Google News redirect URL instead of the final destination URL. There is no visual indicator in the UI to show that the URL resolution failed, making it difficult for users to identify which articles have incomplete/broken URLs.
+
+**Impact**:
+- Articles with unresolved Google News URLs are not clickable/useful
+- Users can't easily identify which articles failed URL resolution
+- No way to distinguish between successful and failed URL resolutions in the UI
+- Reduces data quality - reports contain redirect URLs instead of actual article URLs
+- Users may waste time trying to access articles with broken URLs
+
+**Current Behavior**:
+1. Job processes article from Google News RSS feed
+2. Selenium attempts to resolve redirect URL
+3. Selenium fails (timeout, error, broken redirect)
+4. Article is saved to reports table with Google News redirect URL (e.g., `https://news.google.com/rss/articles/CBMi...`)
+5. Report appears normal in UI with no indication of failure
+6. User clicks link and gets Google News redirect error or timeout
+
+**Desired Behavior**:
+1. Job processes article from Google News RSS feed
+2. Selenium fails to resolve redirect URL
+3. Article is saved with unresolved URL AND marked with resolution_failed flag
+4. UI displays visual indicator for failed resolution:
+   - Asterisk (*) or warning icon next to title
+   - Different styling (grayed out, warning color)
+   - Tooltip explaining "URL resolution failed - showing Google News redirect"
+   - Badge showing "Unresolved URL"
+5. User can easily filter/sort by resolution status
+6. Option to "Retry URL Resolution" for failed articles
+
+**Acceptance Criteria**:
+- [ ] Add `url_resolution_status` field to reports table ('success', 'failed', 'skipped')
+- [ ] Update article processor to track URL resolution success/failure
+- [ ] Add visual indicator in Reports UI for failed URL resolution:
+  - [ ] Asterisk (*) or warning icon next to title
+  - [ ] Tooltip with explanation
+  - [ ] Different text color or badge
+- [ ] Add filter option to show only articles with failed URL resolution
+- [ ] Add "Retry Resolution" button/action for failed articles
+- [ ] Show count of failed resolutions in job summary
+- [ ] Log URL resolution failures separately for monitoring
+
+**Database Schema Change**:
+```sql
+ALTER TABLE reports ADD COLUMN url_resolution_status VARCHAR(20) DEFAULT 'success';
+ALTER TABLE reports ADD COLUMN url_resolution_error TEXT;
+
+-- Index for filtering
+CREATE INDEX idx_reports_url_resolution_status ON reports(url_resolution_status);
+```
+
+**Implementation Notes**:
+- Modify `article_processor.py` to catch URL resolution errors and set status
+- Store original Google News URL and resolution error message
+- Update Reports.tsx to show visual indicators based on resolution status
+- Add background job to periodically retry failed URL resolutions
+
+**Related Files**:
+- `backend/src/services/article_processor.py` (URL resolution logic)
+- `backend/src/fetch_and_report_db.py` (Selenium resolver)
+- `backend/src/models/report.py` (add new fields)
+- `frontend/src/pages/Reports.tsx` (display indicators)
+- Database migration script (new)
+
+**Example UI Indicators**:
+```tsx
+// In report card/list item
+{report.url_resolution_status === 'failed' && (
+  <Tooltip title="URL resolution failed - showing Google News redirect">
+    <WarningIcon color="warning" fontSize="small" />
+  </Tooltip>
+)}
+
+// Or with asterisk
+<Typography>
+  {report.title}
+  {report.url_resolution_status === 'failed' && ' *'}
+</Typography>
+```
+
+---
+
+### 5. Stuck Job Executions After Server Shutdown
 **Status**: Partially Fixed
 **Priority**: Medium
 **Date Identified**: 2025-11-08
@@ -99,6 +366,487 @@ WHERE status = 'running' AND completed_at IS NULL;
 **Related Files**:
 - `backend/src/models/job_execution.py`
 - `backend/celery_app/tasks/scheduled_tasks.py`
+
+---
+
+### 6. No Job Execution History View
+**Status**: UX/Analytics Issue
+**Priority**: High
+**Date Identified**: 2025-11-08
+
+**Description**:
+There is no UI to view the execution history for scheduled jobs. Users cannot see aggregated statistics, success/failure trends, or detailed execution logs for individual jobs. This makes it difficult to understand job performance, troubleshoot failures, or track improvements over time.
+
+**Current Limitation**:
+- Job executions are stored in the `job_executions` table
+- No UI to display this data
+- Users cannot see:
+  - Historical success/failure rates for a specific job
+  - Execution timeline (when jobs ran)
+  - Performance metrics (items processed, duration)
+  - Failure patterns or error messages
+  - Comparison between different job runs
+
+**Impact**:
+- Cannot diagnose why jobs are failing without direct database access
+- No visibility into job performance trends
+- Cannot compare success rates before/after configuration changes
+- Difficult to identify which feeds or articles are causing failures
+- No audit trail for job executions
+
+**Desired Features**:
+
+**1. Job Execution History Page**
+- Dedicated page or tab showing all executions for a selected job
+- Table/list view with key metrics per execution:
+  - Start time, end time, duration
+  - Status (success, failed, partial, running)
+  - Items processed / items failed / total items
+  - Error message (if failed)
+  - Link to view detailed execution log
+
+**2. Aggregated Statistics**
+- Success rate over time (last 7 days, 30 days, all time)
+- Average items processed per execution
+- Average execution duration
+- Total articles collected by this job
+- Trend charts showing:
+  - Success/failure rate over time
+  - Processing speed trends
+  - Items processed per day
+
+**3. Execution Detail View**
+- Click on an execution to see:
+  - Full execution log
+  - List of articles processed in that execution
+  - Error messages and stack traces
+  - Configuration used for that execution
+  - Which feeds/brands were active
+  - Progress timeline (which articles succeeded/failed)
+
+**4. Filtering and Search**
+- Filter by status (success, failed, partial, running)
+- Filter by date range
+- Search by error message
+- Sort by duration, items processed, date
+
+**Acceptance Criteria**:
+- [ ] Add "Execution History" tab/page for each job
+- [ ] Display table of recent executions (last 50-100)
+- [ ] Show aggregated statistics (success rate, avg duration, total items)
+- [ ] Implement execution detail view with full logs
+- [ ] Add charts for success rate trends over time
+- [ ] Filter executions by status and date range
+- [ ] Link from execution to reports created during that execution
+- [ ] Show currently running execution with live progress
+- [ ] Export execution history to CSV for analysis
+
+**API Endpoints Needed**:
+```typescript
+GET /api/jobs/{job_id}/executions?limit=50&offset=0&status=failed
+GET /api/jobs/{job_id}/executions/{execution_id}
+GET /api/jobs/{job_id}/stats?period=30d
+```
+
+**Database Queries**:
+```sql
+-- Get execution history for a job
+SELECT
+  id,
+  started_at,
+  completed_at,
+  EXTRACT(EPOCH FROM (completed_at - started_at)) as duration_seconds,
+  status,
+  items_processed,
+  items_failed,
+  total_items,
+  error_message
+FROM job_executions
+WHERE job_id = $1
+ORDER BY started_at DESC
+LIMIT 50;
+
+-- Get aggregated stats for a job
+SELECT
+  COUNT(*) as total_executions,
+  COUNT(*) FILTER (WHERE status = 'success') as successful_executions,
+  COUNT(*) FILTER (WHERE status = 'failed') as failed_executions,
+  SUM(items_processed) as total_items_processed,
+  AVG(items_processed) as avg_items_per_run,
+  AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) as avg_duration_seconds
+FROM job_executions
+WHERE job_id = $1
+  AND started_at > NOW() - INTERVAL '30 days';
+
+-- Get success rate trend by day
+SELECT
+  DATE(started_at) as execution_date,
+  COUNT(*) as total_runs,
+  COUNT(*) FILTER (WHERE status = 'success') as successful_runs,
+  ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'success') / COUNT(*), 2) as success_rate
+FROM job_executions
+WHERE job_id = $1
+  AND started_at > NOW() - INTERVAL '30 days'
+GROUP BY DATE(started_at)
+ORDER BY execution_date DESC;
+```
+
+**UI Mockup**:
+```tsx
+// Job Execution History Component
+<Box>
+  <Typography variant="h5">Execution History - {jobName}</Typography>
+
+  {/* Stats Cards */}
+  <Grid container spacing={2}>
+    <Grid item xs={3}>
+      <Card>
+        <CardContent>
+          <Typography color="textSecondary">Success Rate (30d)</Typography>
+          <Typography variant="h4">73.7%</Typography>
+        </CardContent>
+      </Card>
+    </Grid>
+    <Grid item xs={3}>
+      <Card>
+        <CardContent>
+          <Typography color="textSecondary">Total Executions</Typography>
+          <Typography variant="h4">81</Typography>
+        </CardContent>
+      </Card>
+    </Grid>
+    <Grid item xs={3}>
+      <Card>
+        <CardContent>
+          <Typography color="textSecondary">Avg Duration</Typography>
+          <Typography variant="h4">4.2 min</Typography>
+        </CardContent>
+      </Card>
+    </Grid>
+    <Grid item xs={3}>
+      <Card>
+        <CardContent>
+          <Typography color="textSecondary">Articles Collected</Typography>
+          <Typography variant="h4">547</Typography>
+        </CardContent>
+      </Card>
+    </Grid>
+  </Grid>
+
+  {/* Trend Chart */}
+  <LineChart data={successRateByDay} />
+
+  {/* Execution Table */}
+  <TableContainer>
+    <Table>
+      <TableHead>
+        <TableRow>
+          <TableCell>Started</TableCell>
+          <TableCell>Duration</TableCell>
+          <TableCell>Status</TableCell>
+          <TableCell>Items Processed</TableCell>
+          <TableCell>Items Failed</TableCell>
+          <TableCell>Actions</TableCell>
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {executions.map(exec => (
+          <TableRow key={exec.id}>
+            <TableCell>{formatDateTime(exec.started_at)}</TableCell>
+            <TableCell>{formatDuration(exec.duration)}</TableCell>
+            <TableCell>
+              <Chip
+                label={exec.status}
+                color={exec.status === 'success' ? 'success' : 'error'}
+              />
+            </TableCell>
+            <TableCell>{exec.items_processed} / {exec.total_items}</TableCell>
+            <TableCell>{exec.items_failed}</TableCell>
+            <TableCell>
+              <Button onClick={() => viewDetails(exec.id)}>View Details</Button>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  </TableContainer>
+</Box>
+```
+
+**Related Files**:
+- `frontend/src/pages/Tasks.tsx` (add execution history tab)
+- `frontend/src/components/ExecutionHistory.tsx` (new component)
+- `backend/api/routes/jobs.py` (add execution history endpoints)
+- `backend/src/repositories/job_repository.py` (add execution query methods)
+
+**Implementation Priority**:
+This is a high-priority UX enhancement that will significantly improve:
+- Troubleshooting capabilities
+- Job performance monitoring
+- User confidence in the system
+- Ability to optimize job configurations based on historical data
+
+**Estimated Effort**: 2-3 days
+- Backend API endpoints: 4-6 hours
+- Frontend UI components: 8-12 hours
+- Charts and visualizations: 4-6 hours
+- Testing and polish: 2-4 hours
+
+---
+
+### 7. Google News URL Resolver Extracting Image URLs
+**Status**: Fixed
+**Priority**: High
+**Date Identified**: 2025-11-08
+**Date Fixed**: 2025-11-08
+
+**Description**:
+The Google News URL resolver (in `fetch_and_report_db.py`) was extracting Google CDN image URLs (`lh3.googleusercontent.com`) instead of actual article URLs. This occurred in the fallback regex pattern that searches for any external URL in the HTML source.
+
+**Example of Bad URL**:
+```
+https://lh3.googleusercontent.com/-DR60l-K8vnyi99NZovm9HlXyZwQ85GMDxiwJWzoasZYCUrPuUM_P_4Rb7ei03j-0nRs0c4F=w16
+```
+
+**Log Evidence**:
+```
+2025-11-08 21:56:24 | INFO | fetch_and_report_db | GN resolver: script external url -> https://lh3.googleusercontent.com/-DR60l-K8vnyi99NZovm9HlXyZwQ85GMDxiwJWzoasZYCUrPuUM_P_4Rb7ei03j-0nRs0c4F=w16
+2025-11-08 21:56:24 | INFO | fetch_and_report_db | Final URL resolved: https://lh3.googleusercontent.com/-DR60l-K8vnyi99NZovm9HlXyZwQ85GMDxiwJWzoasZYCUrPuUM_P_4Rb7ei03j-0nRs0c4F=w16
+2025-11-08 21:56:25 | INFO | fetch_and_report_db | Fetching full text from URL https://lh3.googleusercontent.com/-DR60l-K8vnyi99NZovm9HlXyZwQ85GMDxiwJWzoasZYCUrPuUM_P_4Rb7ei03j-0nRs0c4F=w16
+```
+
+**Impact**:
+- Jobs attempted to fetch article content from image URLs
+- Resulted in no meaningful content being extracted
+- Caused processing failures for affected articles
+- Led to poor quality reports with no text content
+
+**Root Cause**:
+The regex pattern `'"(https?://[^"]+)"'` at line 253 was too broad and matched ANY external URL found in the Google News HTML source, including:
+- Image URLs from `googleusercontent.com`
+- Favicon URLs
+- CSS/font URLs
+- Other Google CDN assets
+
+**Fix Applied**:
+Added filtering logic to skip image URLs and Google CDN URLs:
+
+```python
+# Lines 253-264 in backend/src/fetch_and_report_db.py
+for m in re.finditer(r'"(https?://[^"]+)"', raw):
+    url = m.group(1)
+    # Skip image URLs and Google CDN URLs
+    if url.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.ico')):
+        continue
+    if 'googleusercontent.com' in url.lower():
+        continue
+    if '=w16' in url or '=h16' in url:  # Google image size parameters
+        continue
+    if is_external(url):
+        logger.info("GN resolver: script external url -> %s", url)
+        return url
+```
+
+**Files Changed**:
+- `backend/src/fetch_and_report_db.py:253-264` (URL extraction filtering)
+
+**Testing**:
+After fix, the resolver correctly skips image URLs and continues searching for valid article URLs.
+
+---
+
+### 8. Process Leak Causes Performance Degradation
+**Status**: Critical Performance Issue
+**Priority**: High
+**Date Identified**: 2025-11-08
+
+**Description**:
+When start scripts are run multiple times without properly stopping previous instances (especially after failures or errors), duplicate Celery worker processes accumulate, causing severe performance degradation. The `stop_all.sh` script fails to reliably kill Celery workers, leading to process leaks that consume CPU, memory, and database connections.
+
+**Observed Symptoms**:
+- UI becomes extremely slow and unresponsive
+- Multiple duplicate Celery worker processes running simultaneously (25+ processes instead of 4)
+- Database connection pool exhaustion
+- Increased memory usage (multiple Python processes competing for resources)
+- Duplicate log entries appearing in logs
+- System appears "sluggish" overall
+
+**Evidence**:
+```bash
+# Before cleanup - process leak
+$ ps aux | grep -E "(celery|python|node)" | grep -v grep | wc -l
+25
+
+# After proper cleanup
+$ ps aux | grep -E "(celery|python|node)" | grep -v grep | wc -l
+4
+```
+
+**Root Causes**:
+
+1. **Incomplete stop_all.sh cleanup**:
+   - `pkill -f "celery"` command in stop_all.sh fails to kill stubborn processes
+   - No verification that processes were actually killed
+   - Workers may ignore SIGTERM signal
+
+2. **Start script doesn't check for existing processes**:
+   - `start_all.sh` doesn't verify services are stopped before starting
+   - No pre-flight check for conflicting processes
+   - Users may run start script multiple times when things appear broken
+
+3. **Background process management**:
+   - Celery workers spawned with `&` in background
+   - No PID file tracking to identify processes later
+   - Parent shell exits but child processes remain
+
+4. **User workflow patterns**:
+   - Error occurs → User runs stop script
+   - Stop script fails silently → User runs start script again
+   - New processes start while old ones still running
+   - Cycle repeats with each troubleshooting attempt
+
+**Impact**:
+- **Severe**: UI completely unusable due to performance degradation
+- Users unable to diagnose the issue (processes hidden in background)
+- Requires manual intervention with `pkill -9` to recover
+- Can happen gradually over multiple restart attempts
+- Wastes development time troubleshooting "slow UI" instead of actual bugs
+
+**Immediate Workaround**:
+```bash
+# Force kill all Celery processes and restart cleanly
+pkill -9 -f "celery"
+cd /path/to/abmc_phase1
+./stop_all.sh
+./start_all.sh
+```
+
+**Proposed Solutions**:
+
+**1. Improve stop_all.sh reliability** (High Priority)
+- Use `pkill -9` (SIGKILL) instead of `pkill -15` (SIGTERM) for Celery
+- Add verification loop to ensure processes are dead
+- Return error code if processes can't be killed
+- Add retry logic with escalating signals (TERM → INT → KILL)
+
+```bash
+# Enhanced kill_by_name function
+kill_by_name() {
+    local pattern=$1
+    local service=$2
+
+    echo -e "${YELLOW}Stopping $service...${NC}"
+
+    # Try SIGTERM first
+    pgrep -f "$pattern" | xargs kill -15 2>/dev/null
+    sleep 2
+
+    # Verify and escalate to SIGKILL if needed
+    if pgrep -f "$pattern" > /dev/null 2>&1; then
+        echo -e "${YELLOW}Processes still running, forcing SIGKILL...${NC}"
+        pgrep -f "$pattern" | xargs kill -9 2>/dev/null
+        sleep 1
+    fi
+
+    # Final verification
+    if pgrep -f "$pattern" > /dev/null 2>&1; then
+        echo -e "${RED}✗ Failed to stop $service${NC}"
+        return 1
+    else
+        echo -e "${GREEN}✓ $service stopped${NC}"
+        return 0
+    fi
+}
+```
+
+**2. Add pre-flight checks to start_all.sh** (High Priority)
+- Check for existing processes before starting
+- Automatically run stop_all.sh if conflicts detected
+- Fail fast with clear error message if processes won't die
+
+```bash
+# Add to start_all.sh before starting services
+echo "Checking for existing processes..."
+
+if lsof -ti :8000 > /dev/null 2>&1; then
+    echo "⚠️  Backend already running on port 8000"
+    echo "Running ./stop_all.sh to clean up..."
+    ./stop_all.sh
+    sleep 2
+fi
+
+if pgrep -f "celery.*worker" > /dev/null 2>&1; then
+    echo "⚠️  Celery workers already running"
+    echo "Running ./stop_all.sh to clean up..."
+    ./stop_all.sh
+    sleep 2
+fi
+```
+
+**3. Implement PID file tracking** (Medium Priority)
+- Write PID files when starting services
+- Use PID files for targeted killing in stop script
+- Clean up stale PID files on start
+
+```bash
+# In start script
+celery -A celery_app.celery worker & echo $! > /tmp/celery_worker.pid
+
+# In stop script
+if [ -f /tmp/celery_worker.pid ]; then
+    kill -9 $(cat /tmp/celery_worker.pid) 2>/dev/null
+    rm /tmp/celery_worker.pid
+fi
+```
+
+**4. Add process monitoring endpoint** (Low Priority)
+- Create admin endpoint `/api/admin/health/processes`
+- Show count of running workers and their PIDs
+- Expose in UI with warning if count is abnormal
+- Allow manual cleanup via API
+
+**5. Implement systemd/supervisord** (Production Solution)
+- Replace bash scripts with proper process manager
+- Automatic restart on failure
+- Better logging and monitoring
+- Clean shutdown guarantees
+- Prevents process leaks by design
+
+**Acceptance Criteria**:
+- [ ] stop_all.sh reliably kills all processes (100% success rate)
+- [ ] start_all.sh detects and resolves existing process conflicts
+- [ ] Scripts provide clear feedback about what they're doing
+- [ ] No zombie processes left after stop_all.sh
+- [ ] System remains responsive after multiple restart cycles
+- [ ] Add tests to verify cleanup works correctly
+
+**Testing Procedure**:
+1. Start services normally with `./start_all.sh`
+2. Verify clean process count (4 processes)
+3. Run `./start_all.sh` again without stopping
+4. Verify it detects conflict and auto-cleans
+5. Stop with `./stop_all.sh`
+6. Verify all processes are dead (0 processes)
+7. Repeat cycle 5 times - verify no leaks
+
+**Related Files**:
+- [stop_all.sh](stop_all.sh) (needs enhanced kill logic)
+- [start_all.sh](start_all.sh) (needs pre-flight checks)
+- [backend/scripts/run_celery_worker.sh](backend/scripts/run_celery_worker.sh) (needs PID tracking)
+
+**Estimated Effort**: 4-6 hours
+- Enhanced stop script: 2 hours
+- Pre-flight checks in start script: 1 hour
+- PID file tracking: 2 hours
+- Testing and validation: 1 hour
+
+**Priority Justification**:
+This is a **high-priority** issue because:
+- Causes complete system failure (unusable UI)
+- Difficult to diagnose for users
+- Happens frequently during development
+- Easy to fix with proper cleanup logic
+- Prevents productive development work
 
 ---
 

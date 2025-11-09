@@ -84,23 +84,24 @@ app.autodiscover_tasks(['celery_app.tasks'])
 def setup_celery_logger(**kwargs):
     """Configure Celery logger with our custom format"""
     from api.logging_config import LOG_FORMAT, DATE_FORMAT
+    import sys
 
     # Configure the root logger
     root_logger = logging.getLogger()
     root_logger.handlers.clear()
     root_logger.setLevel(logging.INFO)
 
-    # Create handlers with our custom format
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT))
-
+    # File handler for persistent logs
     log_file = Path(__file__).parent.parent / "logs" / "celery_worker.log"
     file_handler = logging.FileHandler(log_file)
     file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT))
-
-    # Add handlers to root logger
-    root_logger.addHandler(console_handler)
     root_logger.addHandler(file_handler)
+
+    # Console handler for real-time output
+    # Use sys.__stdout__ to avoid Celery's redirected stdout
+    console_handler = logging.StreamHandler(sys.__stdout__)
+    console_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT))
+    root_logger.addHandler(console_handler)
 
 
 # Celery worker lifecycle signals

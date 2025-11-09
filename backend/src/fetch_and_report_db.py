@@ -252,6 +252,13 @@ def _extract_publisher_from_gn_html(gn_html: bytes, base_url: str) -> Optional[s
 
     for m in re.finditer(r'"(https?://[^"]+)"', raw):
         url = m.group(1)
+        # Skip image URLs and Google CDN URLs
+        if url.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.ico')):
+            continue
+        if 'googleusercontent.com' in url.lower():
+            continue
+        if '=w16' in url or '=h16' in url:  # Google image size parameters
+            continue
         if is_external(url):
             logger.info("GN resolver: script external url -> %s", url)
             return url
@@ -307,7 +314,15 @@ def _resolve_with_selenium_gn(url: str, wait_secs: float = 4.0) -> Optional[str]
         else:
             driver = webdriver.Chrome(options=opts)
 
-        driver.set_page_load_timeout(25)
+        # Set page load timeout to 30 seconds (reduced from 25 for consistency)
+        # This controls how long Selenium waits for the page to load
+        driver.set_page_load_timeout(30)
+
+        # Configure HTTP timeout for the underlying urllib3 connection
+        # This prevents 120-second HTTP timeouts that cause 6-minute hangs
+        if hasattr(driver, 'command_executor') and hasattr(driver.command_executor, '_client_config'):
+            driver.command_executor._client_config.timeout = 30
+
         try:
             driver.execute_cdp_cmd(
                 "Network.setExtraHTTPHeaders",
