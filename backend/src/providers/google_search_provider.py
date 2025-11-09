@@ -9,11 +9,14 @@ from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 from .base_provider import ContentProvider
 
+# Create logger for this module
+logger = logging.getLogger(__name__)
+
 try:
     from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
 except ImportError:
-    logging.warning("Google API client not installed. Run: pip install google-api-python-client")
+    logger.warning("Google API client not installed. Run: pip install google-api-python-client")
     build = None
     HttpError = Exception
 
@@ -67,7 +70,7 @@ class GoogleSearchProvider(ContentProvider):
         if build is None:
             raise ImportError("Google API client not installed. Run: pip install google-api-python-client")
 
-        logging.info(f"GoogleSearchProvider initialized with {len(search_queries)} queries")
+        logger.info(f"GoogleSearchProvider initialized with {len(search_queries)} queries")
 
     def fetch_items(self) -> List[Dict]:
         """
@@ -83,7 +86,7 @@ class GoogleSearchProvider(ContentProvider):
             service = build("customsearch", "v1", developerKey=self.api_key)
 
             for query in self.search_queries:
-                logging.info(f"Executing Google search: {query}")
+                logger.info(f"Executing Google search: {query}")
 
                 try:
                     # Execute the search request
@@ -139,22 +142,22 @@ class GoogleSearchProvider(ContentProvider):
 
                         items.append(item)
 
-                    logging.info(f"Fetched {len(search_items)} results for query: {query}")
+                    logger.info(f"Fetched {len(search_items)} results for query: {query}")
 
                 except HttpError as e:
-                    logging.error(f"HTTP error executing search '{query}': {e}")
+                    logger.error(f"HTTP error executing search '{query}': {e}")
                     if e.resp.status == 429:
-                        logging.error("Rate limit exceeded. You may have exceeded your daily quota.")
+                        logger.error("Rate limit exceeded. You may have exceeded your daily quota.")
                     continue
                 except Exception as e:
-                    logging.exception(f"Failed executing search '{query}': {e}")
+                    logger.exception(f"Failed executing search '{query}': {e}")
                     continue
 
         except Exception as e:
-            logging.exception(f"Failed to initialize Google Custom Search service: {e}")
+            logger.exception(f"Failed to initialize Google Custom Search service: {e}")
             return []
 
-        logging.info(f"GoogleSearchProvider: Fetched {len(items)} total items from {len(self.search_queries)} queries")
+        logger.info(f"GoogleSearchProvider: Fetched {len(items)} total items from {len(self.search_queries)} queries")
         return items
 
     def get_provider_name(self) -> str:

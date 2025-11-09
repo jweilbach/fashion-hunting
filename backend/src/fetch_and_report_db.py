@@ -6,7 +6,9 @@ Maintains all existing RSS logic while adding TikTok support.
 """
 
 import logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 import os, time, json, yaml, traceback, random, re, math, unicodedata
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
@@ -359,7 +361,7 @@ def _resolve_final_url(url: str) -> str:
         )
         http_final = resp.url or url
         host = urlparse(http_final).netloc
-        logging.info("Resolver: HTTP final -> %s", http_final)
+        logger.info("Resolver: HTTP final -> %s", http_final)
 
         if host and not any(host.endswith(h) for h in GOOGLE_HOSTS):
             return http_final
@@ -370,20 +372,20 @@ def _resolve_final_url(url: str) -> str:
 
         return http_final
     except Exception as e:
-        logging.warning("Resolver error for %s: %s", url, e)
+        logger.warning("Resolver error for %s: %s", url, e)
         return url
 
 def _fetch_full_html(url: str) -> Optional[bytes]:
     try:
         headers = {"Referer": "https://news.google.com/"}
-        logging.info("Fetching full text from URL %s", url)
+        logger.info("Fetching full text from URL %s", url)
         r = SESSION.get(url, timeout=35, headers=headers)
         if r.status_code >= 400:
-            logging.warning("Fetch returned %s for %s", r.status_code, url)
+            logger.warning("Fetch returned %s for %s", r.status_code, url)
             return None
         return r.content
     except Exception as e:
-        logging.warning("Fetch failed for %s: %s", url, e)
+        logger.warning("Fetch failed for %s: %s", url, e)
         return None
 
 def _meta_blurb(soup: BeautifulSoup,
@@ -474,18 +476,18 @@ def fetch_full_article_text(link: str, title: str, summary_clean: str,
                             extra_meta_properties: List[str],
                             extra_itemprops: List[str],
                             *, return_html=False):
-    logging.info("Resolving link %s", link)
+    logger.info("Resolving link %s", link)
     final_url = _resolve_final_url(link)
-    logging.info("Final URL resolved: %s", final_url)
+    logger.info("Final URL resolved: %s", final_url)
 
     # Fetch HTML for article text extraction
     html = _fetch_full_html(final_url)
 
     if not html:
-        logging.warning("Failed to fetch HTML for %s", final_url)
+        logger.warning("Failed to fetch HTML for %s", final_url)
     elif return_html:
         # Only log HTML bytes when we're going to use it for brand extraction
-        logging.info("Fetched HTML bytes: %d", len(html))
+        logger.info("Fetched HTML bytes: %d", len(html))
 
     parts = []
     if title: parts.append(title.strip())
