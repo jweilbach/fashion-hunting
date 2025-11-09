@@ -41,7 +41,7 @@ try:
     TIKTOK_AVAILABLE = True
 except ImportError:
     TIKTOK_AVAILABLE = False
-    # logging.warning("TikTok provider not available. Install with: pip install TikTok-Api playwright")
+    # logger.warning("TikTok provider not available. Install with: pip install TikTok-Api playwright")
 
 # Full-article extraction & parsing (for RSS)
 import requests
@@ -156,7 +156,7 @@ def load_config():
     settings.setdefault("enable_rss", True)
     settings.setdefault("enable_tiktok", False)  # Opt-in for TikTok
     
-    logging.info(
+    logger.info(
         "Loaded config: %d RSS feeds, %d TikTok searches | sheet_id=%s / worksheet=%r",
         len(rss_feeds), len(tiktok_searches),
         settings.get("sheet_id"), settings.get("worksheet_name")
@@ -228,32 +228,32 @@ def _extract_publisher_from_gn_html(gn_html: bytes, base_url: str) -> Optional[s
         if m:
             candidate = urljoin(base_url, m.group(1).strip().strip('"\''))
             if is_external(candidate):
-                logging.info("GN resolver: meta-refresh -> %s", candidate)
+                logger.info("GN resolver: meta-refresh -> %s", candidate)
                 return candidate
 
     link_canon = soup.find("link", rel=lambda v: v and "canonical" in v.lower())
     if link_canon and link_canon.get("href"):
         href = link_canon["href"].strip()
         if is_external(href):
-            logging.info("GN resolver: canonical -> %s", href)
+            logger.info("GN resolver: canonical -> %s", href)
             return href
 
     for a in soup.find_all("a", href=True):
         href = urljoin(base_url, a["href"].strip())
         if is_external(href):
-            logging.info("GN resolver: external anchor -> %s", href)
+            logger.info("GN resolver: external anchor -> %s", href)
             return href
 
     raw = gn_html.decode("utf-8", errors="ignore")
     m = re.search(r'destinationUrl"\s*:\s*"([^"]+)"', raw)
     if m and is_external(m.group(1)):
-        logging.info("GN resolver: script destinationUrl -> %s", m.group(1))
+        logger.info("GN resolver: script destinationUrl -> %s", m.group(1))
         return m.group(1)
 
     for m in re.finditer(r'"(https?://[^"]+)"', raw):
         url = m.group(1)
         if is_external(url):
-            logging.info("GN resolver: script external url -> %s", url)
+            logger.info("GN resolver: script external url -> %s", url)
             return url
 
     return None
@@ -319,7 +319,7 @@ def _resolve_with_selenium_gn(url: str, wait_secs: float = 4.0) -> Optional[str]
         driver.get(url)
         time.sleep(wait_secs)
         final = driver.current_url or url
-        logging.info("GN resolver (selenium): final -> %s", final)
+        logger.info("GN resolver (selenium): final -> %s", final)
         
         if "news.google.com" not in (urlparse(final).netloc or ""):
             try: driver.quit()
@@ -328,7 +328,7 @@ def _resolve_with_selenium_gn(url: str, wait_secs: float = 4.0) -> Optional[str]
 
         time.sleep(min(6.0, max(1.0, wait_secs)))
         final = driver.current_url or url
-        logging.info("GN resolver (selenium): second check -> %s", final)
+        logger.info("GN resolver (selenium): second check -> %s", final)
         try: driver.quit()
         except Exception: pass
         
@@ -337,7 +337,7 @@ def _resolve_with_selenium_gn(url: str, wait_secs: float = 4.0) -> Optional[str]
         return None
 
     except Exception as e:
-        logging.info("Selenium resolver error: %s", e)
+        logger.info("Selenium resolver error: %s", e)
         try: driver.quit()
         except Exception: pass
         return None
@@ -345,7 +345,7 @@ def _resolve_with_selenium_gn(url: str, wait_secs: float = 4.0) -> Optional[str]
 def _resolve_final_url(url: str) -> str:
     direct = extract_publisher_url_from_google_news_param(url)
     if direct:
-        logging.info("GN resolver: ?url= param -> %s", direct)
+        logger.info("GN resolver: ?url= param -> %s", direct)
         return direct
 
     sel = _resolve_with_selenium_gn(url)
@@ -620,7 +620,7 @@ class FeedProcessor:
             with open(settings_path) as f:
                 settings = yaml.safe_load(f) or {}
 
-        logging.info(
+        logger.info(
             f"Loaded config: {len(rss_feeds)} RSS feeds, {len(tiktok_searches)} TikTok searches | "
             f"sheet_id={settings.get('sheet_id')} / worksheet='{settings.get('worksheet_name')}'"
         )
@@ -643,38 +643,38 @@ class FeedProcessor:
 
             # Add RSS provider
             if self.settings.get("enable_rss", True) and self.rss_feeds:
-                logging.info("Enabling RSS provider with %d feeds", len(self.rss_feeds))
+                logger.info("Enabling RSS provider with %d feeds", len(self.rss_feeds))
                 providers.append(RSSProvider(self.rss_feeds))
 
             # Add TikTok provider
             if self.settings.get("enable_tiktok", False) and self.tiktok_searches:
                 if not TIKTOK_AVAILABLE:
-                    logging.warning("TikTok provider requested but not available")
+                    logger.warning("TikTok provider requested but not available")
                 else:
-                    logging.info("Enabling TikTok provider with %d searches", len(self.tiktok_searches))
+                    logger.info("Enabling TikTok provider with %d searches", len(self.tiktok_searches))
                     providers.append(TikTokProvider(self.tiktok_searches, headless=True))
 
             if not providers:
-                logging.error("No providers enabled")
+                logger.error("No providers enabled")
                 return {'status': 'error', 'message': 'No providers enabled'}
 
             # Fetch items from all providers
             all_items = []
             for provider in providers:
                 try:
-                    logging.info("Fetching from provider: %s", provider.get_provider_name())
+                    logger.info("Fetching from provider: %s", provider.get_provider_name())
                     items = provider.fetch_items()
                     all_items.extend(items)
-                    logging.info("Got %d items from %s", len(items), provider.get_provider_name())
+                    logger.info("Got %d items from %s", len(items), provider.get_provider_name())
                 except Exception as e:
-                    logging.error("Error fetching from provider %s: %s", provider.get_provider_name(), e)
+                    logger.error("Error fetching from provider %s: %s", provider.get_provider_name(), e)
                     continue
 
-            logging.info("Total items fetched from all providers: %d", len(all_items))
+            logger.info("Total items fetched from all providers: %d", len(all_items))
 
             # Limit total items per run
             if len(all_items) > MAX_ITEMS_PER_RUN:
-                logging.info("Limiting to %d items (out of %d)", MAX_ITEMS_PER_RUN, len(all_items))
+                logger.info("Limiting to %d items (out of %d)", MAX_ITEMS_PER_RUN, len(all_items))
                 all_items = all_items[:MAX_ITEMS_PER_RUN]
 
             # Process each item
@@ -699,13 +699,13 @@ class FeedProcessor:
             for idx, item in enumerate(all_items):
                 try:
                     provider_type = item.get('provider', 'unknown')
-                    logging.info("Processing item %d/%d [%s]: %s",
+                    logger.info("Processing item %d/%d [%s]: %s",
                                 idx+1, len(all_items), provider_type, item.get('title', '')[:50])
 
                     # Determine how to extract full text based on provider
                     if provider_type == 'RSS':
                         # Full article extraction for RSS items
-                        logging.info("Fetching full text: source=%s title=%r", item.get("source"), item.get("title"))
+                        logger.info("Fetching full text: source=%s title=%r", item.get("source"), item.get("title"))
                         fulltext, html_bytes = fetch_full_article_text(
                             item.get("link", ""), item.get("title", ""), item.get("raw_summary", ""),
                             self.extra_meta_names, self.extra_meta_properties, self.extra_itemprops,
@@ -713,7 +713,7 @@ class FeedProcessor:
                         )
 
                         if len(fulltext) < 100:
-                            logging.info("Extracted very short article (%d chars) for %s", len(fulltext), item.get("link"))
+                            logger.info("Extracted very short article (%d chars) for %s", len(fulltext), item.get("link"))
 
                     elif provider_type == 'TikTok':
                         # TikTok videos: construct analysis text from video data
@@ -752,28 +752,28 @@ Full context:
                         html_bytes = None
 
                     # AI analysis
-                    logging.info("Analyzing content (%d chars)…", len(fulltext))
+                    logger.info("Analyzing content (%d chars)…", len(fulltext))
                     analysis = self.ai_client.classify_summarize(fulltext, self.known_brands)
 
                     # Extract and filter brands
                     brands_raw = analysis.get("brands", [])
-                    logging.info("AI extracted %d brands from text: %s", len(brands_raw), brands_raw)
+                    logger.info("AI extracted %d brands from text: %s", len(brands_raw), brands_raw)
                     brands_list = _filter_brands(brands_raw, self.ignore_brand_exact, self.ignore_brand_patterns)
-                    logging.info("After filtering: %d brands remain: %s", len(brands_list), brands_list)
+                    logger.info("After filtering: %d brands remain: %s", len(brands_list), brands_list)
 
                     # For RSS: try AI brand extraction from HTML if enabled
                     if provider_type == 'RSS' and html_bytes and self.settings.get("enable_ai_brand_extraction", True):
-                        logging.info("Starting HTML brand extraction (hybrid mode)...")
+                        logger.info("Starting HTML brand extraction (hybrid mode)...")
                         brands_ai = self.ai_client.ai_extract_brands_from_raw_html(
                             html_bytes, self.ignore_brand_exact, self.ignore_brand_patterns
                         )
-                        logging.info("HTML extraction found %d additional brands: %s", len(brands_ai), brands_ai)
+                        logger.info("HTML extraction found %d additional brands: %s", len(brands_ai), brands_ai)
                         seen = set(map(str.lower, brands_list))
                         for b in brands_ai:
                             if b.lower() not in seen:
                                 brands_list.append(b)
                                 seen.add(b.lower())
-                        logging.info("After HTML merge: %d total brands: %s", len(brands_list), brands_list)
+                        logger.info("After HTML merge: %d total brands: %s", len(brands_list), brands_list)
 
                     # For TikTok: infer from username if no brands detected
                     if provider_type == 'TikTok' and not brands_list:
@@ -784,7 +784,7 @@ Full context:
                                 break
 
                     if not brands_list:
-                        logging.debug("No brands extracted for title=%r | first200=%r",
+                        logger.debug("No brands extracted for title=%r | first200=%r",
                                      item.get('title'), fulltext[:200])
 
                     # Create report in database
@@ -808,7 +808,7 @@ Full context:
                         }
                     )
                     reports_created.append(report)
-                    logging.info("Created report ID: %s with %d brands", report.id, len(brands_list))
+                    logger.info("Created report ID: %s with %d brands", report.id, len(brands_list))
 
                     # Update brand mention counts
                     for brand_name in brands_list:
@@ -827,7 +827,7 @@ Full context:
                                 timestamp=report.timestamp
                             )
                         except Exception as e:
-                            logging.warning("Failed to update brand %s: %s", brand_name, e)
+                            logger.warning("Failed to update brand %s: %s", brand_name, e)
 
                     # Commit after each successful report
                     self.db.commit()
@@ -836,14 +836,14 @@ Full context:
                     time.sleep(SLEEP_BETWEEN_CALLS + random.uniform(0, 0.4))
 
                 except (Timeout, HTTPError, RequestException) as e:
-                    logging.error("Network/API error on item (source=%s title=%r link=%s): %s\n%s",
+                    logger.error("Network/API error on item (source=%s title=%r link=%s): %s\n%s",
                                  item.get("source"), item.get("title"), item.get("link"),
                                  e, traceback.format_exc())
                     failures += 1
                     self.db.rollback()
                     continue
                 except Exception as e:
-                    logging.error("Unexpected failure on item (source=%s title=%r link=%s): %s\n%s",
+                    logger.error("Unexpected failure on item (source=%s title=%r link=%s): %s\n%s",
                                  item.get("source"), item.get("title"), item.get("link"),
                                  e, traceback.format_exc())
                     failures += 1
@@ -852,7 +852,7 @@ Full context:
 
             # Generate recap email BEFORE closing session
             if reports_created:
-                logging.info("Successfully created %d reports in database", len(reports_created))
+                logger.info("Successfully created %d reports in database", len(reports_created))
 
                 # Generate recap email
                 today = datetime.now().strftime("%b %d")
@@ -879,12 +879,12 @@ AE Automation Bot
 
                 print(recap)
             else:
-                logging.info("No reports created.")
+                logger.info("No reports created.")
 
-            logging.info("Run complete. Successes: %d, Failures: %d", len(reports_created), failures)
+            logger.info("Run complete. Successes: %d, Failures: %d", len(reports_created), failures)
 
         except Exception as e:
-            logging.error("Error in _process_items: %s", e, exc_info=True)
+            logger.error("Error in _process_items: %s", e, exc_info=True)
 
         return reports_created, failures
 
@@ -900,7 +900,7 @@ AE Automation Bot
 def main():
     """Main function for CLI usage"""
     if not OPENAI_API_KEY:
-        logging.error("OPENAI_API_KEY is not set. Put it in .env or .env.example.")
+        logger.error("OPENAI_API_KEY is not set. Put it in .env or .env.example.")
         raise SystemExit(1)
 
     # Load settings to get tenant_id
@@ -911,7 +911,7 @@ def main():
     processor = FeedProcessor(tenant_id=tenant_id)
     try:
         result = processor.process_feeds()
-        logging.info("Processing complete: %s", result)
+        logger.info("Processing complete: %s", result)
     finally:
         processor.close()
 
@@ -919,7 +919,7 @@ def main():
 def _original_main():
     """Original main function - kept for reference during refactor"""
     if not OPENAI_API_KEY:
-        logging.error("OPENAI_API_KEY is not set. Put it in .env or .env.example.")
+        logger.error("OPENAI_API_KEY is not set. Put it in .env or .env.example.")
         raise SystemExit(1)
 
     # Load configuration
@@ -950,39 +950,39 @@ def _original_main():
 
     # Add RSS provider
     if settings.get("enable_rss", True) and rss_feeds:
-        logging.info("Enabling RSS provider with %d feeds", len(rss_feeds))
+        logger.info("Enabling RSS provider with %d feeds", len(rss_feeds))
         providers.append(RSSProvider(rss_feeds))
 
     # Add TikTok provider
     if settings.get("enable_tiktok", False) and tiktok_searches:
         if not TIKTOK_AVAILABLE:
-            logging.warning("TikTok provider requested but not available. Install TikTok-Api and playwright.")
+            logger.warning("TikTok provider requested but not available. Install TikTok-Api and playwright.")
         else:
-            logging.info("Enabling TikTok provider with %d searches", len(tiktok_searches))
+            logger.info("Enabling TikTok provider with %d searches", len(tiktok_searches))
             providers.append(TikTokProvider(tiktok_searches, headless=True))
 
     if not providers:
-        logging.error("No providers enabled. Enable RSS and/or TikTok in settings.yaml")
+        logger.error("No providers enabled. Enable RSS and/or TikTok in settings.yaml")
         return
 
     # Fetch items from all providers
     all_items = []
     for provider in providers:
         try:
-            logging.info("Fetching from provider: %s", provider.get_provider_name())
+            logger.info("Fetching from provider: %s", provider.get_provider_name())
             items = provider.fetch_items()
             all_items.extend(items)
-            logging.info("Got %d items from %s", len(items), provider.get_provider_name())
+            logger.info("Got %d items from %s", len(items), provider.get_provider_name())
         except Exception as e:
-            logging.error("Error fetching from provider %s: %s\n%s",
+            logger.error("Error fetching from provider %s: %s\n%s",
                          provider.get_provider_name(), e, traceback.format_exc())
             continue
 
-    logging.info("Total items fetched from all providers: %d", len(all_items))
+    logger.info("Total items fetched from all providers: %d", len(all_items))
 
     # Limit total items per run
     if len(all_items) > MAX_ITEMS_PER_RUN:
-        logging.info("Limiting to %d items (out of %d)", MAX_ITEMS_PER_RUN, len(all_items))
+        logger.info("Limiting to %d items (out of %d)", MAX_ITEMS_PER_RUN, len(all_items))
         all_items = all_items[:MAX_ITEMS_PER_RUN]
 
     reports_created = []
@@ -993,20 +993,20 @@ def _original_main():
         for idx, item in enumerate(all_items):
             try:
                 provider_type = item.get('provider', 'unknown')
-                logging.info("Processing item %d/%d [%s]: %s",
+                logger.info("Processing item %d/%d [%s]: %s",
                             idx+1, len(all_items), provider_type, item.get('title', '')[:50])
 
                 # Determine how to extract full text based on provider
                 if provider_type == 'RSS':
                     # Full article extraction for RSS items
-                    logging.info("Fetching full text: source=%s title=%r", item.get("source"), item.get("title"))
+                    logger.info("Fetching full text: source=%s title=%r", item.get("source"), item.get("title"))
                     fulltext, html_bytes = fetch_full_article_text(
                         item.get("link", ""), item.get("title", ""), item.get("raw_summary", ""),
                         extra_meta_names, extra_meta_properties, extra_itemprops, return_html=True
                     )
 
                     if len(fulltext) < 100:
-                        logging.info("Extracted very short article (%d chars) for %s", len(fulltext), item.get("link"))
+                        logger.info("Extracted very short article (%d chars) for %s", len(fulltext), item.get("link"))
 
                 elif provider_type == 'TikTok':
                     # TikTok videos: construct analysis text from video data
@@ -1045,7 +1045,7 @@ Full context:
                     html_bytes = None
 
                 # AI analysis
-                logging.info("Analyzing content (%d chars)…", len(fulltext))
+                logger.info("Analyzing content (%d chars)…", len(fulltext))
                 analysis = ai_client.classify_summarize(fulltext, known_brands)
 
                 # Extract and filter brands
@@ -1072,7 +1072,7 @@ Full context:
                             break
 
                 if not brands_list:
-                    logging.debug("No brands extracted for title=%r | first200=%r",
+                    logger.debug("No brands extracted for title=%r | first200=%r",
                                  item.get('title'), fulltext[:200])
 
                 # Create report in database
@@ -1095,7 +1095,7 @@ Full context:
                     }
                 )
                 reports_created.append(report)
-                logging.info("Created report ID: %s with %d brands", report.id, len(brands_list))
+                logger.info("Created report ID: %s with %d brands", report.id, len(brands_list))
 
                 # Update brand mention counts
                 for brand_name in brands_list:
@@ -1114,7 +1114,7 @@ Full context:
                             timestamp=report.timestamp
                         )
                     except Exception as e:
-                        logging.warning("Failed to update brand %s: %s", brand_name, e)
+                        logger.warning("Failed to update brand %s: %s", brand_name, e)
 
                 # Commit after each successful report
                 db.commit()
@@ -1123,14 +1123,14 @@ Full context:
                 time.sleep(SLEEP_BETWEEN_CALLS + random.uniform(0, 0.4))
 
             except (Timeout, HTTPError, RequestException) as e:
-                logging.error("Network/API error on item (source=%s title=%r link=%s): %s\n%s",
+                logger.error("Network/API error on item (source=%s title=%r link=%s): %s\n%s",
                              item.get("source"), item.get("title"), item.get("link"),
                              e, traceback.format_exc())
                 failures += 1
                 db.rollback()
                 continue
             except Exception as e:
-                logging.error("Unexpected failure on item (source=%s title=%r link=%s): %s\n%s",
+                logger.error("Unexpected failure on item (source=%s title=%r link=%s): %s\n%s",
                              item.get("source"), item.get("title"), item.get("link"),
                              e, traceback.format_exc())
                 failures += 1
@@ -1139,7 +1139,7 @@ Full context:
 
         # Generate recap email BEFORE closing session
         if reports_created:
-            logging.info("Successfully created %d reports in database", len(reports_created))
+            logger.info("Successfully created %d reports in database", len(reports_created))
 
             # Generate recap email
             today = datetime.now().strftime("%b %d")
@@ -1166,9 +1166,9 @@ AE Automation Bot
 
             print(recap)
         else:
-            logging.info("No reports created.")
+            logger.info("No reports created.")
 
-        logging.info("Run complete. Successes: %d, Failures: %d", len(reports_created), failures)
+        logger.info("Run complete. Successes: %d, Failures: %d", len(reports_created), failures)
 
     finally:
         # Close database session
