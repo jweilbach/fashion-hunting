@@ -3,13 +3,8 @@ import {
   Typography,
   Box,
   Button,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
+  Card,
+  CardContent,
   IconButton,
   Dialog,
   DialogTitle,
@@ -21,26 +16,38 @@ import {
   Alert,
   Switch,
   FormControlLabel,
+  alpha,
+  useTheme,
+  Avatar,
+  Stack,
 } from '@mui/material';
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Add as AddIcon,
+  Business as BusinessIcon,
+  CheckCircle as KnownIcon,
+  Warning as UnknownIcon,
+  BlockOutlined as IgnoredIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { brandsApi } from '../api/brands';
+import { motion } from 'framer-motion';
+import type { Brand as ApiBrand } from '../types';
 
-interface Brand {
-  id: string;
-  brand_name: string;
+const MotionCard = motion.create(Card);
+const MotionBox = motion.create(Box);
+
+interface BrandWithExtras extends ApiBrand {
   aliases?: string[];
-  is_known_brand: boolean;
-  should_ignore: boolean;
-  category?: string;
+  should_ignore?: boolean;
   notes?: string;
 }
 
+type Brand = BrandWithExtras;
+
 const Brands: React.FC = () => {
+  const theme = useTheme();
   const [open, setOpen] = useState(false);
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
   const [formData, setFormData] = useState({
@@ -90,7 +97,7 @@ const Brands: React.FC = () => {
         brand_name: brand.brand_name,
         aliases: brand.aliases?.join(', ') || '',
         is_known_brand: brand.is_known_brand,
-        should_ignore: brand.should_ignore,
+        should_ignore: brand.should_ignore || false,
         category: brand.category || 'client',
         notes: brand.notes || '',
       });
@@ -136,6 +143,37 @@ const Brands: React.FC = () => {
     }
   };
 
+  const getCategoryColor = (category?: string) => {
+    switch (category) {
+      case 'client':
+        return theme.palette.primary.main;
+      case 'competitor':
+        return theme.palette.error.main;
+      case 'partner':
+        return theme.palette.success.main;
+      default:
+        return theme.palette.text.secondary;
+    }
+  };
+
+  const getStatusIcon = (brand: Brand) => {
+    if (brand.should_ignore) return <IgnoredIcon />;
+    if (brand.is_known_brand) return <KnownIcon />;
+    return <UnknownIcon />;
+  };
+
+  const getStatusColor = (brand: Brand) => {
+    if (brand.should_ignore) return 'default';
+    if (brand.is_known_brand) return 'success';
+    return 'warning';
+  };
+
+  const getStatusLabel = (brand: Brand) => {
+    if (brand.should_ignore) return 'Ignored';
+    if (brand.is_known_brand) return 'Known';
+    return 'Unknown';
+  };
+
   if (isLoading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
@@ -150,73 +188,193 @@ const Brands: React.FC = () => {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h3">Brands</Typography>
+      {/* Header */}
+      <MotionBox
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        sx={{
+          background: `linear-gradient(135deg, ${alpha(theme.palette.secondary.light, 0.1)}, ${alpha(theme.palette.info.light, 0.1)})`,
+          borderRadius: 3,
+          p: 4,
+          mb: 4,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <Box>
+          <Typography variant="h3" gutterBottom sx={{ fontWeight: 600, mb: 1 }}>
+            Brands
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Manage your tracked brands, aliases, and categories
+          </Typography>
+        </Box>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => handleOpen()}
+          size="large"
+          sx={{
+            px: 3,
+            py: 1.5,
+          }}
         >
           Add Brand
         </Button>
-      </Box>
+      </MotionBox>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Brand Name</TableCell>
-              <TableCell>Aliases</TableCell>
-              <TableCell>Category</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {brands?.map((brand: Brand) => (
-              <TableRow key={brand.id}>
-                <TableCell>{brand.brand_name}</TableCell>
-                <TableCell>
-                  {brand.aliases?.map((alias, idx) => (
-                    <Chip key={idx} label={alias} size="small" sx={{ mr: 0.5 }} />
-                  ))}
-                </TableCell>
-                <TableCell>{brand.category}</TableCell>
-                <TableCell>
-                  {brand.should_ignore ? (
-                    <Chip label="Ignored" color="default" size="small" />
-                  ) : brand.is_known_brand ? (
-                    <Chip label="Known" color="success" size="small" />
-                  ) : (
-                    <Chip label="Unknown" color="warning" size="small" />
-                  )}
-                </TableCell>
-                <TableCell align="right">
+      {/* Brands Grid */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {brands?.map((brand: Brand, index: number) => (
+          <MotionCard
+            key={brand.id}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, delay: index * 0.05 }}
+            sx={{
+              '&:hover': {
+                transform: 'translateX(4px)',
+                boxShadow: `0 8px 24px ${alpha(getCategoryColor(brand.category), 0.15)}`,
+              },
+              transition: 'all 0.3s ease',
+              borderLeft: `4px solid ${getCategoryColor(brand.category)}`,
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Box display="flex" alignItems="flex-start" justifyContent="space-between">
+                <Box display="flex" gap={2} flex={1}>
+                  <Avatar
+                    sx={{
+                      width: 56,
+                      height: 56,
+                      background: `linear-gradient(135deg, ${getCategoryColor(brand.category)}, ${alpha(getCategoryColor(brand.category), 0.7)})`,
+                      fontSize: '1.5rem',
+                      fontWeight: 600,
+                    }}
+                  >
+                    <BusinessIcon sx={{ fontSize: 28 }} />
+                  </Avatar>
+
+                  <Box flex={1}>
+                    <Box display="flex" alignItems="center" gap={1} mb={1} flexWrap="wrap">
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                        {brand.brand_name}
+                      </Typography>
+                      <Chip
+                        icon={getStatusIcon(brand)}
+                        label={getStatusLabel(brand)}
+                        color={getStatusColor(brand)}
+                        size="small"
+                        sx={{ fontWeight: 500 }}
+                      />
+                      <Chip
+                        label={brand.category || 'other'}
+                        size="small"
+                        sx={{
+                          backgroundColor: alpha(getCategoryColor(brand.category), 0.1),
+                          color: getCategoryColor(brand.category),
+                          fontWeight: 500,
+                          textTransform: 'capitalize',
+                        }}
+                      />
+                    </Box>
+
+                    {brand.aliases && brand.aliases.length > 0 && (
+                      <Box mb={1.5}>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontWeight: 500 }}>
+                          Aliases:
+                        </Typography>
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                          {brand.aliases.map((alias, idx) => (
+                            <Chip
+                              key={idx}
+                              label={alias}
+                              size="small"
+                              variant="outlined"
+                              sx={{ mb: 0.5 }}
+                            />
+                          ))}
+                        </Stack>
+                      </Box>
+                    )}
+
+                    {brand.notes && (
+                      <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                        {brand.notes}
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+
+                <Stack direction="row" spacing={1}>
                   <IconButton
                     size="small"
                     onClick={() => handleOpen(brand)}
-                    color="primary"
+                    sx={{
+                      color: theme.palette.primary.main,
+                      '&:hover': {
+                        backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                      },
+                    }}
                   >
                     <EditIcon />
                   </IconButton>
                   <IconButton
                     size="small"
                     onClick={() => handleDelete(brand.id)}
-                    color="error"
+                    sx={{
+                      color: theme.palette.error.main,
+                      '&:hover': {
+                        backgroundColor: alpha(theme.palette.error.main, 0.1),
+                      },
+                    }}
                   >
                     <DeleteIcon />
                   </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                </Stack>
+              </Box>
+            </CardContent>
+          </MotionCard>
+        ))}
+      </Box>
+
+      {brands?.length === 0 && (
+        <Card sx={{ p: 6, textAlign: 'center' }}>
+          <BusinessIcon sx={{ fontSize: 64, color: theme.palette.text.secondary, mb: 2 }} />
+          <Typography variant="h6" color="text.secondary" gutterBottom>
+            No brands yet
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Add your first brand to start tracking mentions
+          </Typography>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpen()}>
+            Add Brand
+          </Button>
+        </Card>
+      )}
 
       {/* Add/Edit Dialog */}
-      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-        <DialogTitle>{editingBrand ? 'Edit Brand' : 'Add Brand'}</DialogTitle>
-        <DialogContent>
+      <Dialog
+        open={open}
+        onClose={handleClose}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: 3,
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 2 }}>
+          <Typography variant="h5" sx={{ fontWeight: 600 }}>
+            {editingBrand ? 'Edit Brand' : 'Add Brand'}
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
           <TextField
             fullWidth
             label="Brand Name"
@@ -240,7 +398,7 @@ const Brands: React.FC = () => {
             onChange={(e) => setFormData({ ...formData, category: e.target.value })}
             margin="normal"
             select
-            SelectProps={{ native: true }}
+            slotProps={{ select: { native: true } }}
           >
             <option value="client">Client</option>
             <option value="competitor">Competitor</option>
@@ -256,30 +414,35 @@ const Brands: React.FC = () => {
             multiline
             rows={3}
           />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={formData.is_known_brand}
-                onChange={(e) => setFormData({ ...formData, is_known_brand: e.target.checked })}
-              />
-            }
-            label="Known Brand"
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={formData.should_ignore}
-                onChange={(e) => setFormData({ ...formData, should_ignore: e.target.checked })}
-              />
-            }
-            label="Ignore in Reports"
-          />
+          <Box sx={{ mt: 2 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formData.is_known_brand}
+                  onChange={(e) => setFormData({ ...formData, is_known_brand: e.target.checked })}
+                />
+              }
+              label="Known Brand"
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formData.should_ignore}
+                  onChange={(e) => setFormData({ ...formData, should_ignore: e.target.checked })}
+                />
+              }
+              label="Ignore in Reports"
+            />
+          </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose}>Cancel</Button>
+        <DialogActions sx={{ p: 3, pt: 2 }}>
+          <Button onClick={handleClose} size="large">
+            Cancel
+          </Button>
           <Button
             onClick={handleSubmit}
             variant="contained"
+            size="large"
             disabled={!formData.brand_name || createMutation.isPending || updateMutation.isPending}
           >
             {editingBrand ? 'Update' : 'Create'}

@@ -6,13 +6,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from datetime import datetime
 import sys
+import os
 from pathlib import Path
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from api.config import settings
+from api.logging_config import setup_logging, get_logger
 from api.routers import auth, reports, brands, feeds, analytics, public, jobs
+
+# Setup logging
+log_level = os.getenv("LOG_LEVEL", "INFO")
+setup_logging(log_level=log_level)
+logger = get_logger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
@@ -112,16 +119,16 @@ app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytic
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup"""
-    print(f"🚀 Starting {settings.APP_NAME} v{settings.APP_VERSION}")
-    print(f"📝 Environment: {settings.ENV}")
-    print(f"📚 API Docs: http://{settings.API_HOST}:{settings.API_PORT}/docs")
+    logger.info(f"🚀 Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    logger.info(f"📝 Environment: {settings.ENV}")
+    logger.info(f"📚 API Docs: http://{settings.API_HOST}:{settings.API_PORT}/docs")
 
 
 # Shutdown event
 @app.on_event("shutdown")
 async def shutdown_event():
     """Run on application shutdown"""
-    print(f"👋 Shutting down {settings.APP_NAME}")
+    logger.info(f"👋 Shutting down {settings.APP_NAME}")
 
 
 if __name__ == "__main__":

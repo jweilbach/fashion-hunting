@@ -141,6 +141,31 @@ class ReportRepository:
             return True
         return False
 
+    def count(
+        self,
+        tenant_id: UUID,
+        provider: Optional[str] = None,
+        status: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> int:
+        """Count reports with filters"""
+        query = self.db.query(func.count(Report.id)).filter(Report.tenant_id == tenant_id)
+
+        if provider:
+            query = query.filter(Report.provider == provider)
+
+        if status:
+            query = query.filter(Report.processing_status == status)
+
+        if start_date:
+            query = query.filter(Report.timestamp >= start_date)
+
+        if end_date:
+            query = query.filter(Report.timestamp <= end_date)
+
+        return query.scalar() or 0
+
     # Analytics methods
 
     def get_sentiment_stats(self, tenant_id: UUID, days: int = 30) -> Dict[str, int]:

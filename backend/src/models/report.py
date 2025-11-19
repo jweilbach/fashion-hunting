@@ -56,6 +56,8 @@ class Report(Base):
         Index('idx_reports_tenant_status_timestamp', 'tenant_id', 'processing_status', 'timestamp'),
         Index('idx_reports_tenant_provider_timestamp', 'tenant_id', 'provider', 'timestamp'),
         Index('idx_reports_tenant_dedupe', 'tenant_id', 'dedupe_key', unique=True),
+        # GIN index for array containment queries on brands column
+        Index('idx_reports_brands_gin', 'brands', postgresql_using='gin'),
     )
 
     def __repr__(self):

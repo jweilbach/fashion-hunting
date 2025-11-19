@@ -122,3 +122,21 @@ class FeedRepository:
     def disable(self, feed_id: UUID) -> Optional[FeedConfig]:
         """Disable a feed"""
         return self.update(feed_id, enabled=False)
+
+    def count(
+        self,
+        tenant_id: UUID,
+        provider: Optional[str] = None,
+        enabled_only: bool = False
+    ) -> int:
+        """Count feed configs"""
+        from sqlalchemy import func
+        query = self.db.query(func.count(FeedConfig.id)).filter(FeedConfig.tenant_id == tenant_id)
+
+        if provider:
+            query = query.filter(FeedConfig.provider == provider)
+
+        if enabled_only:
+            query = query.filter(FeedConfig.enabled == True)
+
+        return query.scalar() or 0

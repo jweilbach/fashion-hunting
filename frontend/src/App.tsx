@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
+import { ThemeProvider, CssBaseline } from '@mui/material';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
@@ -9,9 +9,10 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import Brands from './pages/Brands';
-import Settings from './pages/Settings';
-import Tasks from './pages/Tasks';
-import History from './pages/History';
+import Feeds from './pages/Feeds';
+import Jobs from './pages/Jobs';
+import Reports from './pages/Reports';
+import theme from './theme/theme';
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -19,18 +20,6 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       retry: 1,
-    },
-  },
-});
-
-// Create MUI theme
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
     },
   },
 });
@@ -69,35 +58,39 @@ function App() {
                 }
               />
               <Route
-                path="/settings"
+                path="/feeds"
                 element={
                   <ProtectedRoute>
                     <Layout>
-                      <Settings />
+                      <Feeds />
                     </Layout>
                   </ProtectedRoute>
                 }
               />
               <Route
-                path="/tasks"
+                path="/jobs"
                 element={
                   <ProtectedRoute>
                     <Layout>
-                      <Tasks />
+                      <Jobs />
                     </Layout>
                   </ProtectedRoute>
                 }
               />
               <Route
-                path="/history"
+                path="/reports"
                 element={
                   <ProtectedRoute>
                     <Layout>
-                      <History />
+                      <Reports />
                     </Layout>
                   </ProtectedRoute>
                 }
               />
+              {/* Legacy route redirects */}
+              <Route path="/settings" element={<Navigate to="/feeds" replace />} />
+              <Route path="/tasks" element={<Navigate to="/jobs" replace />} />
+              <Route path="/history" element={<Navigate to="/reports" replace />} />
 
               {/* Default redirect */}
               <Route path="/" element={<Navigate to="/dashboard" replace />} />

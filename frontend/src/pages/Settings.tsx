@@ -213,7 +213,7 @@ const Settings: React.FC = () => {
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h3">Settings - Newsfeeds</Typography>
+        <Typography variant="h3">Feeds</Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}

@@ -17,7 +17,7 @@ from api.database import get_db
 from api import schemas
 from api.auth import get_current_user, require_viewer
 from models.user import User
-from repositories.report_repository import ReportRepository
+from services.analytics_service import AnalyticsService
 
 router = APIRouter()
 
@@ -38,23 +38,8 @@ async def get_sentiment_analysis(
     - Total reports analyzed
     - Time period
     """
-    repo = ReportRepository(db)
-    sentiment_stats = repo.get_sentiment_stats(current_user.tenant_id, days=days)
-
-    total = sum(sentiment_stats.values())
-    percentages = {
-        sentiment: round((count / total * 100), 2) if total > 0 else 0
-        for sentiment, count in sentiment_stats.items()
-    }
-
-    return {
-        "period_days": days,
-        "total_reports": total,
-        "sentiment_counts": sentiment_stats,
-        "sentiment_percentages": percentages,
-        "start_date": (datetime.now() - timedelta(days=days)).isoformat(),
-        "end_date": datetime.now().isoformat()
-    }
+    service = AnalyticsService(db)
+    return service.get_sentiment_analysis(current_user.tenant_id, days=days)
 
 
 @router.get("/brands/top", response_model=List[Dict[str, Any]])
@@ -74,17 +59,8 @@ async def get_top_brands(
     - List of brands with mention counts
     - Sorted by frequency (descending)
     """
-    repo = ReportRepository(db)
-    top_brands = repo.get_top_brands(current_user.tenant_id, days=days, limit=limit)
-
-    return [
-        {
-            "brand": brand,
-            "mention_count": count,
-            "rank": idx + 1
-        }
-        for idx, (brand, count) in enumerate(top_brands)
-    ]
+    service = AnalyticsService(db)
+    return service.get_top_brands(current_user.tenant_id, days=days, limit=limit)
 
 
 @router.get("/reports/daily", response_model=List[Dict[str, Any]])
@@ -105,18 +81,10 @@ async def get_daily_report_counts(
     - Total reports per day
     - Average reach per day
     """
-    repo = ReportRepository(db)
-    daily_stats = repo.get_daily_counts(current_user.tenant_id, days=days, provider=provider)
-
-    return [
-        {
-            "date": date.isoformat(),
-            "report_count": count,
-            "avg_reach": avg_reach or 0,
-            "provider": provider or "all"
-        }
-        for date, count, avg_reach in daily_stats
-    ]
+    service = AnalyticsService(db)
+    return service.get_daily_report_counts(
+        current_user.tenant_id, days=days, provider=provider
+    )
 
 
 @router.get("/providers", response_model=Dict[str, Any])
@@ -135,25 +103,8 @@ async def get_provider_breakdown(
     - Total reach by provider
     - Percentage distribution
     """
-    repo = ReportRepository(db)
-    provider_stats = repo.get_provider_stats(current_user.tenant_id, days=days)
-
-    total_reports = sum(stat['report_count'] for stat in provider_stats.values())
-    total_reach = sum(stat['total_reach'] for stat in provider_stats.values())
-
-    # Add percentages
-    for provider, stats in provider_stats.items():
-        stats['report_percentage'] = round((stats['report_count'] / total_reports * 100), 2) if total_reports > 0 else 0
-        stats['reach_percentage'] = round((stats['total_reach'] / total_reach * 100), 2) if total_reach > 0 else 0
-
-    return {
-        "period_days": days,
-        "total_reports": total_reports,
-        "total_reach": total_reach,
-        "providers": provider_stats,
-        "start_date": (datetime.now() - timedelta(days=days)).isoformat(),
-        "end_date": datetime.now().isoformat()
-    }
+    service = AnalyticsService(db)
+    return service.get_provider_breakdown(current_user.tenant_id, days=days)
 
 
 @router.get("/summary", response_model=Dict[str, Any])
@@ -175,37 +126,8 @@ async def get_analytics_summary(
     - Average daily reports
     - Total estimated reach
     """
-    repo = ReportRepository(db)
-
-    # Get all analytics
-    sentiment_stats = repo.get_sentiment_stats(current_user.tenant_id, days=days)
-    top_brands = repo.get_top_brands(current_user.tenant_id, days=days, limit=5)
-    provider_stats = repo.get_provider_stats(current_user.tenant_id, days=days)
-
-    total_reports = sum(sentiment_stats.values())
-    total_reach = sum(stat['total_reach'] for stat in provider_stats.values())
-    avg_daily_reports = round(total_reports / days, 2) if days > 0 else 0
-
-    return {
-        "period_days": days,
-        "start_date": (datetime.now() - timedelta(days=days)).isoformat(),
-        "end_date": datetime.now().isoformat(),
-        "total_reports": total_reports,
-        "avg_daily_reports": avg_daily_reports,
-        "total_estimated_reach": total_reach,
-        "sentiment": {
-            "counts": sentiment_stats,
-            "percentages": {
-                sentiment: round((count / total_reports * 100), 2) if total_reports > 0 else 0
-                for sentiment, count in sentiment_stats.items()
-            }
-        },
-        "top_brands": [
-            {"brand": brand, "mentions": count}
-            for brand, count in top_brands
-        ],
-        "providers": provider_stats
-    }
+    service = AnalyticsService(db)
+    return service.get_analytics_summary(current_user.tenant_id, days=days)
 
 
 @router.get("/trends", response_model=Dict[str, Any])
@@ -222,42 +144,5 @@ async def get_trends(
     - New brands emerging
     - Provider performance changes
     """
-    repo = ReportRepository(db)
-
-    # Current week (last 7 days)
-    current_sentiment = repo.get_sentiment_stats(current_user.tenant_id, days=7)
-    current_total = sum(current_sentiment.values())
-
-    # Previous week (8-14 days ago)
-    # Note: This would require date range filtering in repository methods
-    # For now, we'll use 14-day stats and approximate
-    prev_sentiment = repo.get_sentiment_stats(current_user.tenant_id, days=14)
-    prev_total = sum(prev_sentiment.values()) - current_total
-
-    # Calculate change
-    volume_change = current_total - prev_total
-    volume_change_pct = round((volume_change / prev_total * 100), 2) if prev_total > 0 else 0
-
-    # Get current top brands
-    current_brands = repo.get_top_brands(current_user.tenant_id, days=7, limit=10)
-
-    return {
-        "period": "last_7_days_vs_previous_7_days",
-        "current_week": {
-            "total_reports": current_total,
-            "sentiment": current_sentiment
-        },
-        "previous_week": {
-            "total_reports": prev_total,
-            "sentiment": {k: v - current_sentiment.get(k, 0) for k, v in prev_sentiment.items()}
-        },
-        "changes": {
-            "volume_change": volume_change,
-            "volume_change_percentage": volume_change_pct,
-            "trend": "up" if volume_change > 0 else "down" if volume_change < 0 else "stable"
-        },
-        "top_brands_current_week": [
-            {"brand": brand, "mentions": count}
-            for brand, count in current_brands
-        ]
-    }
+    service = AnalyticsService(db)
+    return service.get_trends(current_user.tenant_id)

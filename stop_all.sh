@@ -86,6 +86,16 @@ kill_by_name "run_api.sh" "API Script"
 # redis-cli shutdown
 # echo -e "${GREEN}✓ Redis stopped${NC}"
 
+# Clean up running jobs in database
+echo -e "${YELLOW}Cleaning up running jobs in database...${NC}"
+psql -d fashion_hunting -c "UPDATE job_executions SET status = 'failed', completed_at = NOW(), error_message = 'Job interrupted by server shutdown' WHERE status = 'running' AND completed_at IS NULL;" > /dev/null 2>&1
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✓ Running jobs marked as failed${NC}"
+else
+    echo -e "${RED}✗ Failed to update running jobs (database may not be running)${NC}"
+fi
+
 echo ""
 echo -e "${GREEN}✅ All servers stopped successfully!${NC}"
 echo ""

@@ -81,6 +81,12 @@ class JobExecution(Base):
     error_message = Column(Text)
     execution_log = Column(Text)
 
+    # Progress tracking
+    total_items = Column(Integer, default=0)
+    current_item_index = Column(Integer, default=0)
+    current_item_title = Column(String(500))
+    celery_task_id = Column(String(255), index=True)
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -103,5 +109,9 @@ class JobExecution(Base):
             'items_failed': self.items_failed,
             'error_message': self.error_message,
             'execution_log': self.execution_log,
+            'total_items': self.total_items,
+            'current_item_index': self.current_item_index,
+            'current_item_title': self.current_item_title,
+            'celery_task_id': self.celery_task_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }

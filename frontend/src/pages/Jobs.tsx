@@ -3,13 +3,8 @@ import {
   Typography,
   Box,
   Button,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
+  Card,
+  CardContent,
   IconButton,
   Dialog,
   DialogTitle,
@@ -30,6 +25,10 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  alpha,
+  useTheme,
+  Avatar,
+  Stack,
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import {
@@ -37,20 +36,33 @@ import {
   Delete as DeleteIcon,
   Add as AddIcon,
   PlayArrow as RunIcon,
-  CheckCircle as EnabledIcon,
+  CheckCircle as SuccessIcon,
   Cancel as DisabledIcon,
   Schedule as ScheduleIcon,
   ExpandMore as ExpandMoreIcon,
+  EventRepeat as DailyIcon,
+  CalendarToday as WeeklyIcon,
+  TouchApp as ManualIcon,
+  Code as CustomIcon,
+  Error as ErrorIcon,
+  HourglassEmpty as RunningIcon,
+  AccessTime as TimeIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { jobsApi, type ScheduledJob, type ScheduledJobCreate } from '../api/jobs';
 import { brandsApi } from '../api/brands';
 import { feedsApi, type Feed } from '../api/feeds';
 import type { Brand } from '../types';
+import { motion } from 'framer-motion';
 
-const Tasks: React.FC = () => {
+const MotionCard = motion.create(Card);
+const MotionBox = motion.create(Box);
+
+const Jobs: React.FC = () => {
+  const theme = useTheme();
   const [open, setOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null);
+  const [runningJobIds, setRunningJobIds] = useState<Set<string>>(new Set());
   const [formData, setFormData] = useState({
     name: '',
     brand_ids: [] as string[],
@@ -72,6 +84,11 @@ const Tasks: React.FC = () => {
   const { data: jobs, isLoading: jobsLoading, error: jobsError } = useQuery({
     queryKey: ['jobs'],
     queryFn: () => jobsApi.getJobs(),
+    refetchInterval: (query) => {
+      // Auto-refresh every 5 seconds if any job is running
+      const hasRunningJobs = query.state.data?.some((job: ScheduledJob) => job.last_status === 'running');
+      return hasRunningJobs ? 5000 : false;
+    },
   });
 
   const { data: brands, isLoading: brandsLoading } = useQuery({
@@ -110,8 +127,28 @@ const Tasks: React.FC = () => {
 
   const runMutation = useMutation({
     mutationFn: (id: string) => jobsApi.runJobNow(id),
-    onSuccess: () => {
+    onSuccess: (_data, jobId) => {
+      // Invalidate queries to refresh the UI
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['executions'] });
+
+      // Keep job in running state for 5 seconds, then clear
+      // This gives the backend time to update the job status
+      setTimeout(() => {
+        setRunningJobIds(prev => {
+          const next = new Set(prev);
+          next.delete(jobId);
+          return next;
+        });
+      }, 5000);
+    },
+    onError: (_error, jobId) => {
+      // Remove from running jobs on error
+      setRunningJobIds(prev => {
+        const next = new Set(prev);
+        next.delete(jobId);
+        return next;
+      });
     },
   });
 
@@ -235,12 +272,14 @@ const Tasks: React.FC = () => {
   };
 
   const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this task?')) {
+    if (window.confirm('Are you sure you want to delete this job?')) {
       deleteMutation.mutate(id);
     }
   };
 
   const handleRunNow = (id: string) => {
+    // Add to running jobs set immediately for UI feedback
+    setRunningJobIds(prev => new Set(prev).add(id));
     runMutation.mutate(id);
   };
 
@@ -251,24 +290,65 @@ const Tasks: React.FC = () => {
     return `Custom: ${cron}`;
   };
 
-  const getStatusChip = (job: ScheduledJob) => {
-    if (!job.enabled) {
-      return <Chip icon={<DisabledIcon />} label="Disabled" color="default" size="small" />;
-    }
+  const getScheduleIcon = (cron: string) => {
+    if (cron === '@manual') return <ManualIcon />;
+    if (cron === '0 9 * * *') return <DailyIcon />;
+    if (cron === '0 9 * * 1') return <WeeklyIcon />;
+    return <CustomIcon />;
+  };
 
-    if (!job.last_status) {
-      return <Chip icon={<ScheduleIcon />} label="Never Run" color="info" size="small" />;
-    }
+  const getScheduleColor = (cron: string) => {
+    if (cron === '@manual') return theme.palette.text.secondary;
+    if (cron === '0 9 * * *') return theme.palette.success.main;
+    if (cron === '0 9 * * 1') return theme.palette.info.main;
+    return theme.palette.warning.main;
+  };
+
+  const getStatusIcon = (job: ScheduledJob) => {
+    if (!job.enabled) return <DisabledIcon />;
+    if (!job.last_status) return <ScheduleIcon />;
 
     switch (job.last_status) {
       case 'success':
-        return <Chip icon={<EnabledIcon />} label="Success" color="success" size="small" />;
+        return <SuccessIcon />;
       case 'failed':
-        return <Chip label="Failed" color="error" size="small" />;
+        return <ErrorIcon />;
       case 'running':
-        return <Chip label="Running" color="warning" size="small" />;
+        return <RunningIcon />;
       default:
-        return <Chip label={job.last_status} color="default" size="small" />;
+        return <ScheduleIcon />;
+    }
+  };
+
+  const getStatusColor = (job: ScheduledJob) => {
+    if (!job.enabled) return 'default';
+    if (!job.last_status) return 'info';
+
+    switch (job.last_status) {
+      case 'success':
+        return 'success';
+      case 'failed':
+        return 'error';
+      case 'running':
+        return 'warning';
+      default:
+        return 'default';
+    }
+  };
+
+  const getStatusLabel = (job: ScheduledJob) => {
+    if (!job.enabled) return 'Disabled';
+    if (!job.last_status) return 'Never Run';
+
+    switch (job.last_status) {
+      case 'success':
+        return 'Success';
+      case 'failed':
+        return 'Failed';
+      case 'running':
+        return 'Running';
+      default:
+        return job.last_status;
     }
   };
 
@@ -283,7 +363,7 @@ const Tasks: React.FC = () => {
   };
 
   const formatDateTime = (dateStr?: string): string => {
-    if (!dateStr) return '-';
+    if (!dateStr) return 'Never';
     return new Date(dateStr).toLocaleString();
   };
 
@@ -296,116 +376,287 @@ const Tasks: React.FC = () => {
   }
 
   if (jobsError) {
-    return <Alert severity="error">Failed to load tasks. Please try again later.</Alert>;
+    return <Alert severity="error">Failed to load jobs. Please try again later.</Alert>;
   }
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h3">Jobs</Typography>
+      {/* Header */}
+      <MotionBox
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        sx={{
+          background: `linear-gradient(135deg, ${alpha(theme.palette.primary.light, 0.1)}, ${alpha(theme.palette.secondary.light, 0.1)})`,
+          borderRadius: 3,
+          p: 4,
+          mb: 4,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <Box>
+          <Typography variant="h3" gutterBottom sx={{ fontWeight: 600, mb: 1 }}>
+            Jobs
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Schedule and manage automated brand monitoring tasks
+          </Typography>
+        </Box>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => handleOpen()}
+          size="large"
+          sx={{
+            px: 3,
+            py: 1.5,
+          }}
         >
           Add Job
         </Button>
-      </Box>
+      </MotionBox>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Task Name</TableCell>
-              <TableCell>Brands</TableCell>
-              <TableCell>Feeds</TableCell>
-              <TableCell>Schedule</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Last Run</TableCell>
-              <TableCell>Run Count</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {jobs?.map((job: ScheduledJob) => (
-              <TableRow key={job.id}>
-                <TableCell>
-                  <strong>{job.config?.name || 'Unnamed Task'}</strong>
-                </TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {job.config?.brand_ids?.map((brandId: string) => (
-                      <Chip
-                        key={brandId}
-                        label={getBrandName(brandId)}
+      {/* Jobs Grid */}
+      {(!jobs || jobs.length === 0) ? (
+        <Card sx={{ p: 6, textAlign: 'center' }}>
+          <ScheduleIcon sx={{ fontSize: 64, color: theme.palette.text.secondary, mb: 2 }} />
+          <Typography variant="h6" color="text.secondary" gutterBottom>
+            No jobs yet
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Create your first monitoring job to automate brand tracking
+          </Typography>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpen()}>
+            Add Job
+          </Button>
+        </Card>
+      ) : (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {jobs?.map((job: ScheduledJob, index: number) => {
+            const scheduleColor = getScheduleColor(job.schedule_cron);
+            return (
+              <MotionCard
+                key={job.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, delay: index * 0.05 }}
+                sx={{
+                  '&:hover': {
+                    transform: 'translateX(4px)',
+                    boxShadow: `0 8px 24px ${alpha(scheduleColor, 0.15)}`,
+                  },
+                  transition: 'all 0.3s ease',
+                  borderLeft: `4px solid ${scheduleColor}`,
+                }}
+              >
+                <CardContent sx={{ p: 3 }}>
+                  <Box display="flex" alignItems="flex-start" justifyContent="space-between">
+                    <Box display="flex" gap={2} flex={1}>
+                      <Avatar
+                        sx={{
+                          width: 56,
+                          height: 56,
+                          background: `linear-gradient(135deg, ${scheduleColor}, ${alpha(scheduleColor, 0.7)})`,
+                        }}
+                      >
+                        {getScheduleIcon(job.schedule_cron)}
+                      </Avatar>
+
+                      <Box flex={1}>
+                        <Box display="flex" alignItems="center" gap={1} mb={1} flexWrap="wrap">
+                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            {job.config?.name || 'Unnamed Job'}
+                          </Typography>
+                          <Chip
+                            icon={getStatusIcon(job)}
+                            label={getStatusLabel(job)}
+                            color={getStatusColor(job)}
+                            size="small"
+                            sx={{
+                              fontWeight: 500,
+                              ...(job.last_status === 'running' && {
+                                animation: 'pulse 2s ease-in-out infinite',
+                                '@keyframes pulse': {
+                                  '0%, 100%': {
+                                    opacity: 1,
+                                  },
+                                  '50%': {
+                                    opacity: 0.7,
+                                  },
+                                },
+                              }),
+                            }}
+                          />
+                          {job.last_status === 'running' && (
+                            <CircularProgress size={16} thickness={4} />
+                          )}
+                        </Box>
+
+                        <Stack direction="row" spacing={3} mb={1.5} flexWrap="wrap">
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <ScheduleIcon sx={{ fontSize: 14 }} />
+                              Schedule
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {getScheduleLabel(job.schedule_cron)}
+                            </Typography>
+                          </Box>
+
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <TimeIcon sx={{ fontSize: 14 }} />
+                              Last Run
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {formatDateTime(job.last_run)}
+                            </Typography>
+                          </Box>
+
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Executions
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {job.run_count}
+                            </Typography>
+                          </Box>
+                        </Stack>
+
+                        {/* Brands */}
+                        {job.config?.brand_ids && job.config.brand_ids.length > 0 && (
+                          <Box mb={1}>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontWeight: 500 }}>
+                              Brands:
+                            </Typography>
+                            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                              {job.config.brand_ids.map((brandId: string) => (
+                                <Chip
+                                  key={brandId}
+                                  label={getBrandName(brandId)}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ mb: 0.5 }}
+                                />
+                              ))}
+                            </Stack>
+                          </Box>
+                        )}
+
+                        {/* Feeds */}
+                        {job.config?.feed_ids && job.config.feed_ids.length > 0 && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontWeight: 500 }}>
+                              Feeds:
+                            </Typography>
+                            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                              {job.config.feed_ids.map((feedId: string) => (
+                                <Chip
+                                  key={feedId}
+                                  label={getFeedLabel(feedId)}
+                                  size="small"
+                                  variant="outlined"
+                                  color="primary"
+                                  sx={{ mb: 0.5 }}
+                                />
+                              ))}
+                            </Stack>
+                          </Box>
+                        )}
+                      </Box>
+                    </Box>
+
+                    <Stack direction="row" spacing={1}>
+                      <IconButton
                         size="small"
-                        variant="outlined"
-                      />
-                    )) || '-'}
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {job.config?.feed_ids?.map((feedId: string) => (
-                      <Chip
-                        key={feedId}
-                        label={getFeedLabel(feedId)}
+                        onClick={() => handleRunNow(job.id)}
+                        disabled={
+                          runMutation.isPending ||
+                          job.last_status === 'running' ||
+                          runningJobIds.has(job.id)
+                        }
+                        sx={{
+                          color: theme.palette.success.main,
+                          '&:hover': {
+                            backgroundColor: alpha(theme.palette.success.main, 0.1),
+                          },
+                          '&.Mui-disabled': {
+                            color: theme.palette.action.disabled,
+                          },
+                        }}
+                        title={
+                          job.last_status === 'running' || runningJobIds.has(job.id)
+                            ? 'Job is already running'
+                            : 'Run Now'
+                        }
+                      >
+                        <RunIcon />
+                      </IconButton>
+                      <IconButton
                         size="small"
-                        variant="outlined"
-                        color="primary"
-                      />
-                    )) || '-'}
+                        onClick={() => handleOpen(job)}
+                        sx={{
+                          color: theme.palette.primary.main,
+                          '&:hover': {
+                            backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                          },
+                        }}
+                        title="Edit"
+                      >
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDelete(job.id)}
+                        sx={{
+                          color: theme.palette.error.main,
+                          '&:hover': {
+                            backgroundColor: alpha(theme.palette.error.main, 0.1),
+                          },
+                        }}
+                        title="Delete"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Stack>
                   </Box>
-                </TableCell>
-                <TableCell>{getScheduleLabel(job.schedule_cron)}</TableCell>
-                <TableCell>{getStatusChip(job)}</TableCell>
-                <TableCell>{formatDateTime(job.last_run)}</TableCell>
-                <TableCell>{job.run_count}</TableCell>
-                <TableCell align="right">
-                  <IconButton
-                    size="small"
-                    onClick={() => handleRunNow(job.id)}
-                    color="success"
-                    disabled={runMutation.isPending}
-                    title="Run Now"
-                  >
-                    <RunIcon />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleOpen(job)}
-                    color="primary"
-                    title="Edit"
-                  >
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleDelete(job.id)}
-                    color="error"
-                    title="Delete"
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                </CardContent>
+              </MotionCard>
+            );
+          })}
+        </Box>
+      )}
 
       {/* Add/Edit Dialog */}
-      <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-        <DialogTitle>{editingJob ? 'Edit Task' : 'Create Task'}</DialogTitle>
-        <DialogContent>
+      <Dialog
+        open={open}
+        onClose={handleClose}
+        maxWidth="md"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: 3,
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 2 }}>
+          <Typography variant="h5" sx={{ fontWeight: 600 }}>
+            {editingJob ? 'Edit Job' : 'Create Job'}
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
           <TextField
             fullWidth
-            label="Task Name"
+            label="Job Name"
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             margin="normal"
             required
-            helperText="A descriptive name for this task"
+            helperText="A descriptive name for this job"
           />
 
           <FormControl fullWidth margin="normal" required>
@@ -497,7 +748,7 @@ const Tasks: React.FC = () => {
                   value={formData.max_items_per_run}
                   onChange={(e) => setFormData({ ...formData, max_items_per_run: parseInt(e.target.value) || 10 })}
                   helperText="Maximum number of items to process per execution"
-                  inputProps={{ min: 1, max: 100 }}
+                  slotProps={{ htmlInput: { min: 1, max: 100 } }}
                 />
 
                 {/* HTML Brand Extraction */}
@@ -535,7 +786,7 @@ const Tasks: React.FC = () => {
                         value={formData.max_html_size_bytes}
                         onChange={(e) => setFormData({ ...formData, max_html_size_bytes: parseInt(e.target.value) || 500000 })}
                         helperText="Maximum HTML size to process (default: 500000 = 500KB)"
-                        inputProps={{ min: 1000, step: 10000 }}
+                        slotProps={{ htmlInput: { min: 1000, step: 10000 } }}
                       />
                     )}
                   </>
@@ -585,11 +836,14 @@ const Tasks: React.FC = () => {
             sx={{ mt: 2 }}
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose}>Cancel</Button>
+        <DialogActions sx={{ p: 3, pt: 2 }}>
+          <Button onClick={handleClose} size="large">
+            Cancel
+          </Button>
           <Button
             onClick={handleSubmit}
             variant="contained"
+            size="large"
             disabled={
               !formData.name ||
               formData.brand_ids.length === 0 ||
@@ -604,19 +858,42 @@ const Tasks: React.FC = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Success/Error Alerts */}
       {runMutation.isSuccess && (
-        <Alert severity="success" sx={{ mt: 2 }} onClose={() => runMutation.reset()}>
-          Task queued for execution
+        <Alert
+          severity="success"
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            boxShadow: 3,
+            borderRadius: 2,
+          }}
+          onClose={() => runMutation.reset()}
+        >
+          Job queued for execution
         </Alert>
       )}
 
       {runMutation.isError && (
-        <Alert severity="error" sx={{ mt: 2 }} onClose={() => runMutation.reset()}>
-          Failed to run task. Please try again.
+        <Alert
+          severity="error"
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            boxShadow: 3,
+            borderRadius: 2,
+          }}
+          onClose={() => runMutation.reset()}
+        >
+          {runMutation.error?.message?.includes('already running') || runMutation.error?.message?.includes('409')
+            ? 'Job is already running. Please wait for the current execution to complete.'
+            : 'Failed to run job. Please try again.'}
         </Alert>
       )}
     </Box>
   );
 };
 
-export default Tasks;
+export default Jobs;

@@ -69,17 +69,14 @@ async def list_reports(
             end_date=end_date
         )
 
-        # Get total count (this could be optimized with a count query)
-        all_reports = repo.get_all(
+        # Get total count efficiently using count method
+        total = repo.count(
             tenant_id=current_user.tenant_id,
-            skip=0,
-            limit=10000,  # Large number to get all
             provider=provider,
             status=status or 'completed',
             start_date=start_date,
             end_date=end_date
         )
-        total = len(all_reports)
 
     # Calculate pages
     pages = ceil(total / page_size)

@@ -139,7 +139,10 @@ const Signup: React.FC = () => {
           }}
         >
           <Typography variant="h4" component="h1" gutterBottom align="center">
-            ABMC Media Tracker
+            Marketing Hunting
+          </Typography>
+          <Typography variant="caption" component="div" align="center" color="text.secondary" sx={{ mb: 2 }}>
+            A Lavacake Product
           </Typography>
           <Typography variant="h6" gutterBottom align="center" color="text.secondary">
             Create Your Account
