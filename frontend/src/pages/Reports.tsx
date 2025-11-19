@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Typography,
   Box,
@@ -19,6 +19,8 @@ import {
   Paper,
   Divider,
   LinearProgress,
+  Collapse,
+  IconButton,
 } from '@mui/material';
 import {
   CheckCircle as SuccessIcon,
@@ -27,6 +29,8 @@ import {
   Info as InfoIcon,
   AccessTime as TimeIcon,
   History as HistoryIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { jobsApi, type JobExecution, type ScheduledJob } from '../api/jobs';
@@ -35,10 +39,19 @@ import { motion } from 'framer-motion';
 const MotionCard = motion.create(Card);
 const MotionBox = motion.create(Box);
 
+interface GroupedExecutions {
+  jobId: string;
+  jobName: string;
+  executions: JobExecution[];
+  totalExecutions: number;
+  latestExecution: JobExecution;
+}
+
 const Reports: React.FC = () => {
   const theme = useTheme();
   const [selectedExecution, setSelectedExecution] = useState<JobExecution | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
 
   const { data: executions, isLoading, error } = useQuery({
     queryKey: ['executions'],
@@ -58,6 +71,53 @@ const Reports: React.FC = () => {
   const getJobName = (jobId: string): string => {
     const job = jobs?.find((j: ScheduledJob) => j.id === jobId);
     return job?.config?.name || 'Unknown Job';
+  };
+
+  // Group executions by job
+  const groupedExecutions = useMemo(() => {
+    if (!executions || !jobs) return [];
+
+    const grouped = new Map<string, GroupedExecutions>();
+
+    executions.forEach((execution: JobExecution) => {
+      const jobId = execution.job_id;
+
+      if (!grouped.has(jobId)) {
+        grouped.set(jobId, {
+          jobId,
+          jobName: getJobName(jobId),
+          executions: [],
+          totalExecutions: 0,
+          latestExecution: execution,
+        });
+      }
+
+      const group = grouped.get(jobId)!;
+      group.executions.push(execution);
+      group.totalExecutions = group.executions.length;
+
+      // Update latest execution if this one is more recent
+      if (new Date(execution.started_at) > new Date(group.latestExecution.started_at)) {
+        group.latestExecution = execution;
+      }
+    });
+
+    // Convert to array and sort by latest execution date (most recent first)
+    return Array.from(grouped.values()).sort((a, b) =>
+      new Date(b.latestExecution.started_at).getTime() - new Date(a.latestExecution.started_at).getTime()
+    );
+  }, [executions, jobs]);
+
+  const toggleJobExpansion = (jobId: string) => {
+    setExpandedJobs(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(jobId)) {
+        newSet.delete(jobId);
+      } else {
+        newSet.add(jobId);
+      }
+      return newSet;
+    });
   };
 
   const getStatusColor = (status: string) => {
@@ -171,7 +231,7 @@ const Reports: React.FC = () => {
         </Typography>
       </MotionBox>
 
-      {/* Executions Timeline */}
+      {/* Grouped Executions */}
       {(!executions || executions.length === 0) ? (
         <Card sx={{ p: 6, textAlign: 'center' }}>
           <HistoryIcon sx={{ fontSize: 64, color: theme.palette.text.secondary, mb: 2 }} />
@@ -184,11 +244,17 @@ const Reports: React.FC = () => {
         </Card>
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {executions?.map((execution: JobExecution, index: number) => {
+          {groupedExecutions.map((group: GroupedExecutions, index: number) => {
+            const execution = group.latestExecution;
             const statusColor = getStatusColor(execution.status);
+            const isExpanded = expandedJobs.has(group.jobId);
+            const previousExecutions = group.executions
+              .filter(e => e.id !== execution.id)
+              .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
+
             return (
               <MotionCard
-                key={execution.id}
+                key={group.jobId}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.3, delay: index * 0.05 }}
@@ -202,6 +268,7 @@ const Reports: React.FC = () => {
                 }}
               >
                 <CardContent sx={{ p: 3 }}>
+                  {/* Latest Execution */}
                   <Box display="flex" alignItems="flex-start" justifyContent="space-between">
                     <Box display="flex" gap={2} flex={1}>
                       <Avatar
@@ -217,7 +284,7 @@ const Reports: React.FC = () => {
                       <Box flex={1}>
                         <Box display="flex" alignItems="center" gap={1} mb={1} flexWrap="wrap">
                           <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                            {getJobName(execution.job_id)}
+                            {group.jobName}
                           </Typography>
                           <Box
                             sx={{
@@ -239,6 +306,15 @@ const Reports: React.FC = () => {
                           {execution.status === 'running' && (
                             <CircularProgress size={16} thickness={4} />
                           )}
+                          <Chip
+                            label={`${group.totalExecutions} total run${group.totalExecutions !== 1 ? 's' : ''}`}
+                            size="small"
+                            sx={{
+                              backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                              color: theme.palette.primary.main,
+                              fontWeight: 500,
+                            }}
+                          />
                         </Box>
 
                         {/* Progress Bar for Running Jobs */}
@@ -272,7 +348,7 @@ const Reports: React.FC = () => {
                           <Box>
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               <TimeIcon sx={{ fontSize: 14 }} />
-                              Started
+                              Latest Run
                             </Typography>
                             <Typography variant="body2" sx={{ fontWeight: 500 }}>
                               {formatDateTime(execution.started_at)}
@@ -314,15 +390,86 @@ const Reports: React.FC = () => {
                       </Box>
                     </Box>
 
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      onClick={() => handleViewDetails(execution)}
-                      sx={{ minWidth: 90 }}
-                    >
-                      Details
-                    </Button>
+                    <Stack direction="row" spacing={1}>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => handleViewDetails(execution)}
+                        sx={{ minWidth: 90 }}
+                      >
+                        Details
+                      </Button>
+                      {previousExecutions.length > 0 && (
+                        <IconButton
+                          onClick={() => toggleJobExpansion(group.jobId)}
+                          size="small"
+                          sx={{
+                            border: `1px solid ${theme.palette.divider}`,
+                            borderRadius: 1,
+                          }}
+                        >
+                          {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                        </IconButton>
+                      )}
+                    </Stack>
                   </Box>
+
+                  {/* Previous Executions */}
+                  {previousExecutions.length > 0 && (
+                    <Collapse in={isExpanded}>
+                      <Box sx={{ mt: 3, pt: 3, borderTop: `1px solid ${theme.palette.divider}` }}>
+                        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2, fontWeight: 600 }}>
+                          Previous Runs ({previousExecutions.length})
+                        </Typography>
+                        <Stack spacing={2}>
+                          {previousExecutions.map((prevExec: JobExecution) => {
+                            const prevStatusColor = getStatusColor(prevExec.status);
+                            return (
+                              <Paper
+                                key={prevExec.id}
+                                sx={{
+                                  p: 2,
+                                  backgroundColor: alpha(theme.palette.background.default, 0.5),
+                                  borderLeft: `3px solid ${prevStatusColor}`,
+                                }}
+                              >
+                                <Box display="flex" alignItems="center" justifyContent="space-between">
+                                  <Box flex={1}>
+                                    <Box display="flex" alignItems="center" gap={1} mb={1}>
+                                      {getStatusChip(prevExec.status)}
+                                      <Typography variant="body2" color="text.secondary">
+                                        {formatDateTime(prevExec.started_at)}
+                                      </Typography>
+                                    </Box>
+                                    <Stack direction="row" spacing={2}>
+                                      <Typography variant="caption" color="text.secondary">
+                                        Duration: {getDuration(prevExec)}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        Processed: {prevExec.items_processed}
+                                      </Typography>
+                                      {prevExec.items_failed > 0 && (
+                                        <Typography variant="caption" color="error.main">
+                                          Failed: {prevExec.items_failed}
+                                        </Typography>
+                                      )}
+                                    </Stack>
+                                  </Box>
+                                  <Button
+                                    variant="text"
+                                    size="small"
+                                    onClick={() => handleViewDetails(prevExec)}
+                                  >
+                                    View
+                                  </Button>
+                                </Box>
+                              </Paper>
+                            );
+                          })}
+                        </Stack>
+                      </Box>
+                    </Collapse>
+                  )}
                 </CardContent>
               </MotionCard>
             );
