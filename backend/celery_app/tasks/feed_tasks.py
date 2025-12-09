@@ -16,6 +16,10 @@ from celery_app.celery import app
 from models.base import SessionLocal
 from repositories.feed_repository import FeedRepository
 from repositories.report_repository import ReportRepository
+from services.apify_scraper_service import ApifyScraperService
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @app.task(name='celery_app.tasks.feed_tasks.fetch_rss_feed')

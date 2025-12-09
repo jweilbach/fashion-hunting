@@ -30,8 +30,14 @@ export const reportsApi = {
   },
 
   // Get recent reports
-  getRecentReports: async (limit: number = 10, skip: number = 0): Promise<PaginatedResponse<Report>> => {
-    const response = await apiClient.get<PaginatedResponse<Report>>(`/api/v1/public/reports/recent?limit=${limit}&skip=${skip}`);
+  getRecentReports: async (limit: number = 10, skip: number = 0, sourceType?: string): Promise<PaginatedResponse<Report>> => {
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    params.append('skip', skip.toString());
+    if (sourceType) {
+      params.append('source_type', sourceType);
+    }
+    const response = await apiClient.get<PaginatedResponse<Report>>(`/api/v1/public/reports/recent?${params.toString()}`);
     return response.data;
   },
 

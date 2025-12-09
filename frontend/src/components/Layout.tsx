@@ -12,7 +12,6 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Container,
   Avatar,
   alpha,
   useTheme,
@@ -223,15 +222,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         sx={{
           flexGrow: 1,
           p: 3,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
           backgroundColor: theme.palette.background.default,
           minHeight: '100vh',
         }}
       >
         <Toolbar /> {/* Spacer for AppBar */}
-        <Container maxWidth="xl">
-          {children}
-        </Container>
+        {children}
       </Box>
     </Box>
   );

@@ -19,9 +19,40 @@ from repositories.report_repository import ReportRepository
 from ai_client import AIClient
 from providers.rss_provider import RSSProvider
 from providers.google_search_provider import GoogleSearchProvider
+from providers.instagram_provider import InstagramProvider
+from providers.tiktok_provider import TikTokProvider
+from providers.youtube_provider import YouTubeProvider
 from services.processor_factory import ProcessorFactory
 
 logger = logging.getLogger(__name__)
+
+
+def get_source_type(provider: str) -> str:
+    """
+    Determine source_type from provider
+
+    Args:
+        provider: Provider name (e.g., 'RSS', 'INSTAGRAM', 'GOOGLE_SEARCH')
+
+    Returns:
+        Source type: 'digital', 'social', or 'broadcast'
+    """
+    provider_upper = provider.upper()
+
+    # Digital: news articles, RSS feeds, web articles
+    if provider_upper in ('RSS', 'GOOGLE_SEARCH', 'GOOGLE_NEWS', 'WEB', 'ARTICLE'):
+        return 'digital'
+
+    # Social: social media platforms
+    if provider_upper in ('INSTAGRAM', 'TIKTOK', 'TWITTER', 'YOUTUBE', 'LINKEDIN', 'FACEBOOK'):
+        return 'social'
+
+    # Broadcast: TV, radio, podcasts
+    if provider_upper in ('TV', 'BROADCAST', 'TVEYES', 'PODCAST', 'RADIO'):
+        return 'broadcast'
+
+    # Default to digital for unknown providers
+    return 'digital'
 
 
 class JobExecutionResult:
@@ -238,8 +269,15 @@ class JobExecutionService:
         # Separate feeds by provider
         rss_feeds = [f for f in feeds if f.provider.upper() == 'RSS']
         google_search_feeds = [f for f in feeds if f.provider.upper() == 'GOOGLE_SEARCH']
+        instagram_feeds = [f for f in feeds if f.provider.upper() == 'INSTAGRAM']
+        tiktok_feeds = [f for f in feeds if f.provider.upper() == 'TIKTOK']
+        youtube_feeds = [f for f in feeds if f.provider.upper() == 'YOUTUBE']
 
-        logger.info(f"Found {len(rss_feeds)} RSS feeds and {len(google_search_feeds)} Google Search feeds")
+        logger.info(
+            f"Found {len(rss_feeds)} RSS feeds, {len(google_search_feeds)} Google Search feeds, "
+            f"{len(instagram_feeds)} Instagram feeds, {len(tiktok_feeds)} TikTok feeds, "
+            f"and {len(youtube_feeds)} YouTube feeds"
+        )
 
         # Fetch from RSS feeds
         if rss_feeds:
@@ -250,6 +288,21 @@ class JobExecutionService:
         if google_search_feeds:
             google_items = self._fetch_from_google_search(google_search_feeds, config)
             items.extend(google_items)
+
+        # Fetch from Instagram
+        if instagram_feeds:
+            instagram_items = self._fetch_from_instagram(instagram_feeds)
+            items.extend(instagram_items)
+
+        # Fetch from TikTok
+        if tiktok_feeds:
+            tiktok_items = self._fetch_from_tiktok(tiktok_feeds)
+            items.extend(tiktok_items)
+
+        # Fetch from YouTube
+        if youtube_feeds:
+            youtube_items = self._fetch_from_youtube(youtube_feeds)
+            items.extend(youtube_items)
 
         if not items:
             raise ValueError('No items fetched from any provider')
@@ -324,6 +377,154 @@ class JobExecutionService:
             return []
         except Exception as e:
             logger.error(f"Error fetching Google Search results: {e}", exc_info=True)
+            return []
+
+    def _fetch_from_instagram(self, feeds: List[FeedConfig]) -> List[Dict]:
+        """
+        Fetch items from Instagram feeds
+
+        Expects feed config to contain:
+        - search_type: 'mentions', 'profile', or 'hashtag' (defaults to 'mentions')
+
+        Uses feed.feed_value as the search value (brand name, username, or hashtag)
+        """
+        try:
+            if not feeds:
+                return []
+
+            logger.info(f"Processing {len(feeds)} Instagram feeds")
+
+            all_items = []
+            for feed in feeds:
+                if not feed.feed_value:
+                    continue
+
+                # Parse feed config for Instagram-specific config
+                feed_config = feed.config or {}
+                search_type = feed_config.get('search_type', 'mentions')  # default to mentions
+
+                logger.info(
+                    f"Fetching Instagram {search_type}: {feed.label or feed.feed_value} "
+                    f"(limit: {feed.fetch_count} posts)"
+                )
+
+                # Create Instagram provider
+                provider = InstagramProvider(
+                    search_type=search_type,
+                    search_value=feed.feed_value,
+                    max_posts=feed.fetch_count
+                )
+
+                # Fetch items
+                feed_items = provider.fetch_items()
+
+                logger.info(
+                    f"Fetched {len(feed_items)} posts from Instagram "
+                    f"{search_type}: {feed.label or feed.feed_value}"
+                )
+                all_items.extend(feed_items)
+
+            logger.info(f"Total items fetched from {len(feeds)} Instagram feeds: {len(all_items)}")
+            return all_items
+
+        except Exception as e:
+            logger.error(f"Error fetching Instagram content: {e}", exc_info=True)
+            return []
+
+    def _fetch_from_tiktok(self, feeds: List[FeedConfig]) -> List[Dict]:
+        """
+        Fetch items from TikTok feeds
+
+        Expects feed.feed_type to specify the search type:
+        - 'hashtag': Search by hashtag
+        - 'keyword': Search by keyword
+        - 'user': Get user's videos
+
+        Uses feed.feed_value as the search value
+        """
+        try:
+            if not feeds:
+                return []
+
+            logger.info(f"Processing {len(feeds)} TikTok feeds")
+
+            # Build search configs for TikTok provider
+            search_configs = []
+            for feed in feeds:
+                if not feed.feed_value:
+                    continue
+
+                search_config = {
+                    'type': feed.feed_type or 'hashtag',  # hashtag, keyword, or user
+                    'value': feed.feed_value,
+                    'count': feed.fetch_count
+                }
+                search_configs.append(search_config)
+
+                logger.info(
+                    f"Fetching TikTok {search_config['type']}: {feed.label or feed.feed_value} "
+                    f"(limit: {feed.fetch_count} videos)"
+                )
+
+            # Create TikTok provider with all search configs
+            provider = TikTokProvider(search_configs=search_configs)
+
+            # Fetch items
+            all_items = provider.fetch_items()
+
+            logger.info(f"Total items fetched from {len(feeds)} TikTok feeds: {len(all_items)}")
+            return all_items
+
+        except Exception as e:
+            logger.error(f"Error fetching TikTok content: {e}", exc_info=True)
+            return []
+
+    def _fetch_from_youtube(self, feeds: List[FeedConfig]) -> List[Dict]:
+        """
+        Fetch items from YouTube feeds
+
+        Expects feed.feed_type to specify the search type:
+        - 'search': Keyword search
+        - 'channel': Channel videos
+        - 'video': Specific video
+
+        Uses feed.feed_value as the search value (keyword, channel URL, or video URL)
+        """
+        try:
+            if not feeds:
+                return []
+
+            logger.info(f"Processing {len(feeds)} YouTube feeds")
+
+            # Build search configs for YouTube provider
+            search_configs = []
+            for feed in feeds:
+                if not feed.feed_value:
+                    continue
+
+                search_config = {
+                    'type': feed.feed_type or 'search',  # search, channel, or video
+                    'value': feed.feed_value,
+                    'count': feed.fetch_count
+                }
+                search_configs.append(search_config)
+
+                logger.info(
+                    f"Fetching YouTube {search_config['type']}: {feed.label or feed.feed_value} "
+                    f"(limit: {feed.fetch_count} videos)"
+                )
+
+            # Create YouTube provider with all search configs
+            provider = YouTubeProvider(search_configs=search_configs)
+
+            # Fetch items
+            all_items = provider.fetch_items()
+
+            logger.info(f"Total items fetched from {len(feeds)} YouTube feeds: {len(all_items)}")
+            return all_items
+
+        except Exception as e:
+            logger.error(f"Error fetching YouTube content: {e}", exc_info=True)
             return []
 
     def _process_items(
@@ -413,11 +614,16 @@ class JobExecutionService:
     ) -> None:
         """Save processed report to database"""
         try:
+            # Determine source_type from provider
+            provider = processed_data['provider']
+            source_type = get_source_type(provider)
+
             self.report_repo.create(
                 tenant_id=tenant_id,
                 dedupe_key=dedupe_key,
                 source=processed_data['source'],
-                provider=processed_data['provider'],
+                provider=provider,
+                source_type=source_type,
                 brands=processed_data['brands'],
                 title=processed_data['title'],
                 link=processed_data['link'],

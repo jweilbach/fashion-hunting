@@ -7,6 +7,7 @@ export interface Report {
   timestamp: string;
   source: string;
   provider: string;
+  source_type?: 'digital' | 'social' | 'broadcast';
   brands: string[];
   title: string;
   link: string;

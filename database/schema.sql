@@ -83,6 +83,7 @@ CREATE TABLE reports (
     timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
     source VARCHAR(500), -- e.g., "RSS", "TikTok (@username)"
     provider VARCHAR(50) NOT NULL, -- RSS, TikTok, Instagram, etc.
+    source_type VARCHAR(20), -- digital, social, broadcast
 
     -- Content
     brands TEXT[] DEFAULT '{}', -- Array of brand names mentioned
@@ -117,6 +118,7 @@ CREATE INDEX idx_reports_timestamp ON reports(timestamp DESC);
 CREATE INDEX idx_reports_tenant_timestamp ON reports(tenant_id, timestamp DESC);
 CREATE INDEX idx_reports_sentiment ON reports(sentiment);
 CREATE INDEX idx_reports_provider ON reports(provider);
+CREATE INDEX idx_reports_source_type ON reports(source_type);
 CREATE INDEX idx_reports_status ON reports(processing_status);
 CREATE INDEX idx_reports_brands ON reports USING GIN(brands); -- GIN index for array searches
 CREATE INDEX idx_reports_dedupe ON reports(dedupe_key);

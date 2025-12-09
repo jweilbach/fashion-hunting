@@ -1,23 +1,27 @@
 # providers/tiktok_provider.py
 """
-TikTok Provider - fetches videos from TikTok
+TikTok Provider - fetches videos from TikTok using Apify
+
+Uses Apify Actor: clockworks/tiktok-scraper
+Supports: brand mentions, hashtag tracking, user profiles, video engagement
 """
 
 import os
 import logging
-import asyncio
 from typing import List, Dict, Optional, Any
+from datetime import datetime
 from .base_provider import ContentProvider
-from TikTokApi import TikTokApi
+from apify_client import ApifyClient
+from constants import ProviderType
 
 
 class TikTokProvider(ContentProvider):
     """
-    Provider for TikTok videos.
+    Provider for TikTok videos using Apify scraper.
     Fetches videos based on hashtags, keywords, or user profiles.
     """
 
-    def __init__(self, search_configs: List[Dict], headless: bool = True):
+    def __init__(self, search_configs: List[Dict]):
         """
         Initialize TikTok provider.
 
@@ -26,214 +30,139 @@ class TikTokProvider(ContentProvider):
                 - type: 'hashtag', 'keyword', or 'user'
                 - value: hashtag/keyword/username to search
                 - count (optional): number of videos to fetch (default 30)
-            headless: Whether to run browser in headless mode
         """
         self.search_configs = search_configs
-        self.headless = headless
 
-        # Allow overrides via environment variables without changing call sites
-        # Recommended to reduce bot detection:
-        #   export TIKTOK_BROWSER=webkit
-        #   export TIKTOK_PROXY=http://user:pass@host:port
-        self.browser = os.getenv("TIKTOK_BROWSER", "chromium")  # 'chromium' | 'webkit' | 'firefox'
-        self.proxy = os.getenv("TIKTOK_PROXY")  # e.g. http://user:pass@host:port
+        api_token = os.getenv('APIFY_API_TOKEN')
+        if not api_token:
+            raise ValueError("APIFY_API_TOKEN environment variable is required")
 
-        self.api: Optional[TikTokApi] = None
+        self.client = ApifyClient(api_token)
+        self.actor_id = "clockworks/tiktok-scraper"
+
         logging.info(
-            "TikTokProvider initialized with %d searches (headless=%s, browser=%s, proxy=%s)",
-            len(search_configs), self.headless, self.browser, bool(self.proxy)
+            "TikTokProvider initialized with %d searches using Apify",
+            len(search_configs)
         )
 
-    # ──────────────────────────────────────────────────────────────────────
-    # API/session management
-    # ──────────────────────────────────────────────────────────────────────
-    async def _get_api(self) -> TikTokApi:
-        if self.api is None:
-            self.api = TikTokApi()
-            await self._open_sessions()
-        return self.api
-
-    async def _open_sessions(self):
-        kwargs: Dict[str, Any] = {
-            "headless": self.headless,
-            "num_sessions": 1,
-            "sleep_after": 2,
-            "browser": self.browser,
-        }
-        if self.proxy:
-            # TikTokApi expects a list for proxies in some builds; single string works in recent versions.
-            kwargs["proxy"] = self.proxy
-        await self.api.create_sessions(**kwargs)
-
-    async def _reset_sessions(self, *, flip_headless: bool = False, browser: Optional[str] = None):
-        try:
-            if self.api:
-                await self.api.close_sessions()
-        finally:
-            if flip_headless:
-                self.headless = not self.headless
-            if browser:
-                self.browser = browser
-            await self._open_sessions()
-
-    # ──────────────────────────────────────────────────────────────────────
-    # Search helpers
-    # ──────────────────────────────────────────────────────────────────────
-    async def _search_hashtag(self, hashtag: str, count: int = 30) -> List[Dict]:
-        api = await self._get_api()
+    def _search_hashtag(self, hashtag: str, count: int = 30) -> List[Dict]:
+        """Search TikTok by hashtag using Apify"""
         hashtag = hashtag.lstrip('#')
         logging.info("Searching TikTok hashtag: #%s", hashtag)
 
-        # up to two attempts: second attempt toggles to non-headless if needed
-        for attempt in (1, 2):
-            try:
-                tag = api.hashtag(name=hashtag)
-                videos: List[Dict] = []
-                async for video in tag.videos(count=count):
-                    video_data = await self._extract_video_data(video)
-                    if video_data:
-                        videos.append(video_data)
-                logging.info("Found %d videos for #%s", len(videos), hashtag)
-                return videos
-            except Exception as e:
-                logging.error("Error searching hashtag #%s (attempt %d): %s", hashtag, attempt, e)
-                if "empty response" in str(e).lower() or "detecting you're a bot" in str(e).lower():
-                    await self._reset_sessions(flip_headless=True, browser="webkit")
-                else:
-                    break
-        return []
+        run_input = {
+            "hashtags": [hashtag],
+            "resultsPerPage": min(count, 100),
+            "shouldDownloadVideos": False,
+            "shouldDownloadCovers": False,
+        }
 
-    async def _search_keyword(self, keyword: str, count: int = 30) -> List[Dict]:
-        api = await self._get_api()
+        try:
+            run = self.client.actor(self.actor_id).call(run_input=run_input)
+            items = list(self.client.dataset(run["defaultDatasetId"]).iterate_items())
+            logging.info("Found %d videos for #%s", len(items), hashtag)
+            return [self._normalize_video_data(item) for item in items]
+        except Exception as e:
+            logging.error("Error searching hashtag #%s: %s", hashtag, e)
+            return []
+
+    def _search_keyword(self, keyword: str, count: int = 30) -> List[Dict]:
+        """Search TikTok by keyword using Apify"""
         logging.info("Searching TikTok keyword: %s", keyword)
 
-        for attempt in (1, 2):
-            try:
-                videos: List[Dict] = []
+        run_input = {
+            "searchQueries": [keyword],
+            "resultsPerPage": min(count, 100),
+            "shouldDownloadVideos": False,
+            "shouldDownloadCovers": False,
+        }
 
-                # Some TikTokApi builds do NOT expose search.videos; fall back to search.general
-                search_obj = getattr(api, "search", None)
-                videos_method = getattr(search_obj, "videos", None) if search_obj else None
+        try:
+            run = self.client.actor(self.actor_id).call(run_input=run_input)
+            items = list(self.client.dataset(run["defaultDatasetId"]).iterate_items())
+            logging.info("Found %d videos for keyword: %s", len(items), keyword)
+            return [self._normalize_video_data(item) for item in items]
+        except Exception as e:
+            logging.error("Error searching keyword '%s': %s", keyword, e)
+            return []
 
-                if callable(videos_method):
-                    # Newer/alternate builds where search.videos exists as an async generator
-                    async for video in videos_method(keyword, count=count):
-                        vd = await self._extract_video_data(video)
-                        if vd:
-                            videos.append(vd)
-                else:
-                    # Fallback path: search.general returns mixed items; filter video-like
-                    general_method = getattr(search_obj, "general", None)
-                    if not callable(general_method):
-                        raise RuntimeError("TikTokApi: neither search.videos nor search.general available.")
-                    async for item in general_method(keyword, count=count):
-                        # Heuristic: treat things with id + author as videos
-                        try:
-                            d = item.as_dict
-                            if d.get("id") and d.get("author"):
-                                vd = await self._extract_video_data(item)
-                                if vd:
-                                    videos.append(vd)
-                        except Exception:
-                            continue
-
-                logging.info("Found %d videos for keyword: %s", len(videos), keyword)
-                return videos
-            except Exception as e:
-                logging.error("Error searching keyword '%s' (attempt %d): %s", keyword, attempt, e)
-                if "empty response" in str(e).lower() or "detecting you're a bot" in str(e).lower():
-                    await self._reset_sessions(flip_headless=True, browser="webkit")
-                else:
-                    break
-        return []
-
-    async def _get_user_videos(self, username: str, count: int = 30) -> List[Dict]:
-        api = await self._get_api()
+    def _get_user_videos(self, username: str, count: int = 30) -> List[Dict]:
+        """Fetch videos from a specific TikTok user using Apify"""
         username = username.lstrip('@')
         logging.info("Fetching videos from user: @%s", username)
 
-        for attempt in (1, 2):
-            try:
-                user = api.user(username=username)
-                videos: List[Dict] = []
-                async for video in user.videos(count=count):
-                    vd = await self._extract_video_data(video)
-                    if vd:
-                        videos.append(vd)
-                logging.info("Found %d videos from @%s", len(videos), username)
-                return videos
-            except Exception as e:
-                logging.error("Error fetching videos from @%s (attempt %d): %s", username, attempt, e)
-                if "empty response" in str(e).lower() or "detecting you're a bot" in str(e).lower():
-                    await self._reset_sessions(flip_headless=True, browser="webkit")
-                else:
-                    break
-        return []
+        run_input = {
+            "profiles": [username],
+            "resultsPerPage": min(count, 100),
+            "shouldDownloadVideos": False,
+            "shouldDownloadCovers": False,
+        }
 
-    # ──────────────────────────────────────────────────────────────────────
-    # Normalization
-    # ──────────────────────────────────────────────────────────────────────
-    async def _extract_video_data(self, video) -> Optional[Dict]:
         try:
-            video_dict = video.as_dict
-
-            # Creator
-            author = video_dict.get('author', {}) or {}
-            username = author.get('uniqueId') or 'unknown'
-            nickname = author.get('nickname') or username
-
-            # Video
-            video_id = video_dict.get('id') or ''
-            desc = (video_dict.get('desc') or '').strip()
-
-            # URL
-            video_url = f"https://www.tiktok.com/@{username}/video/{video_id}" if username and video_id else ""
-
-            # Hashtags
-            hashtags = []
-            for c in (video_dict.get('challenges') or []):
-                title = (c.get('title') or '').strip()
-                if title:
-                    hashtags.append(f"#{title}")
-
-            # Stats
-            stats = video_dict.get('stats') or {}
-            play_count = int(stats.get('playCount') or 0)
-            like_count = int(stats.get('diggCount') or 0)
-            comment_count = int(stats.get('commentCount') or 0)
-            share_count = int(stats.get('shareCount') or 0)
-
-            stats_text = (
-                f"[👁️ {self._format_number(play_count)} | "
-                f"❤️ {self._format_number(like_count)} | "
-                f"💬 {self._format_number(comment_count)} | "
-                f"🔗 {self._format_number(share_count)}]"
-            )
-            hashtag_text = " ".join(hashtags) if hashtags else ""
-            raw_summary = "\n\n".join(x for x in [desc, hashtag_text, stats_text] if x).strip()
-
-            return {
-                'source': f"TikTok (@{username})",
-                'title': desc[:200] if desc else f"Video by @{username}",
-                'link': video_url,
-                'raw_summary': raw_summary,
-                'provider': 'TikTok',
-                'video_id': video_id,
-                'username': username,
-                'nickname': nickname,
-                'hashtags': hashtags,
-                'stats': {
-                    'plays': play_count,
-                    'likes': like_count,
-                    'comments': comment_count,
-                    'shares': share_count,
-                },
-                'est_reach': play_count,
-                'create_time': video_dict.get('createTime', 0),
-            }
+            run = self.client.actor(self.actor_id).call(run_input=run_input)
+            items = list(self.client.dataset(run["defaultDatasetId"]).iterate_items())
+            logging.info("Found %d videos from @%s", len(items), username)
+            return [self._normalize_video_data(item) for item in items]
         except Exception as e:
-            logging.error("Error extracting video data: %s", e)
-            return None
+            logging.error("Error fetching videos from @%s: %s", username, e)
+            return []
+
+    def _normalize_video_data(self, video: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize TikTok video data from Apify to standard format"""
+        author = video.get('authorMeta', {}) or {}
+        username = author.get('name', 'unknown')
+        nickname = author.get('nickName', username)
+        video_id = video.get('id', '')
+        desc = (video.get('text') or '').strip()
+
+        # URL
+        video_url = video.get('webVideoUrl') or f"https://www.tiktok.com/@{username}/video/{video_id}"
+
+        # Hashtags
+        hashtags = [f"#{tag.get('name', '')}" for tag in video.get('hashtags', [])]
+
+        # Stats - get from top-level fields (Apify returns them here)
+        play_count = int(video.get('playCount', 0))
+        like_count = int(video.get('diggCount', 0))
+        comment_count = int(video.get('commentCount', 0))
+        share_count = int(video.get('shareCount', 0))
+
+        # Debug logging to see what fields are available when play_count is 0
+        if play_count == 0 and (like_count > 0 or comment_count > 0 or share_count > 0):
+            logging.warning(
+                f"TikTok video has engagement but 0 plays. "
+                f"Raw playCount field: {video.get('playCount')}, "
+                f"Available keys: {list(video.keys())[:20]}..."  # Limit output
+            )
+
+        stats_text = (
+            f"[👁️ {self._format_number(play_count)} | "
+            f"❤️ {self._format_number(like_count)} | "
+            f"💬 {self._format_number(comment_count)} | "
+            f"🔗 {self._format_number(share_count)}]"
+        )
+        hashtag_text = " ".join(hashtags) if hashtags else ""
+        raw_summary = "\n\n".join(x for x in [desc, hashtag_text, stats_text] if x).strip()
+
+        return {
+            'source': f"TikTok (@{username})",
+            'title': desc[:200] if desc else f"Video by @{username}",
+            'link': video_url,
+            'raw_summary': raw_summary,
+            'provider': 'TikTok',
+            'video_id': video_id,
+            'username': username,
+            'nickname': nickname,
+            'hashtags': hashtags,
+            'stats': {
+                'plays': play_count,
+                'likes': like_count,
+                'comments': comment_count,
+                'shares': share_count,
+            },
+            'est_reach': play_count,
+            'create_time': video.get('createTime', 0),
+        }
 
     def _format_number(self, num: int) -> str:
         if num >= 1_000_000_000:
@@ -244,10 +173,8 @@ class TikTokProvider(ContentProvider):
             return f"{num/1_000:.1f}K"
         return str(num)
 
-    # ──────────────────────────────────────────────────────────────────────
-    # Orchestration
-    # ──────────────────────────────────────────────────────────────────────
-    async def _fetch_all_videos(self) -> List[Dict]:
+    def fetch_items(self) -> List[Dict]:
+        """Fetch all TikTok videos based on search configurations"""
         all_videos: List[Dict] = []
 
         for config in self.search_configs:
@@ -260,35 +187,19 @@ class TikTokProvider(ContentProvider):
                 continue
 
             if search_type == 'hashtag':
-                vids = await self._search_hashtag(value, count)
+                vids = self._search_hashtag(value, count)
             elif search_type == 'keyword':
-                vids = await self._search_keyword(value, count)
+                vids = self._search_keyword(value, count)
             elif search_type == 'user':
-                vids = await self._get_user_videos(value, count)
+                vids = self._get_user_videos(value, count)
             else:
                 logging.warning("Unknown search type: %s", search_type)
                 continue
 
             all_videos.extend(vids)
 
-            # Gentle pacing between searches
-            if len(self.search_configs) > 1:
-                await asyncio.sleep(2)
-
+        logging.info("TikTokProvider: Fetched %d total videos", len(all_videos))
         return all_videos
 
-    def fetch_items(self) -> List[Dict]:
-        async def _fetch():
-            try:
-                return await self._fetch_all_videos()
-            finally:
-                if self.api:
-                    await self.api.close_sessions()
-                    self.api = None
-
-        videos = asyncio.run(_fetch())
-        logging.info("TikTokProvider: Fetched %d total videos", len(videos))
-        return videos
-
     def get_provider_name(self) -> str:
-        return "TikTok"
+        return ProviderType.TIKTOK

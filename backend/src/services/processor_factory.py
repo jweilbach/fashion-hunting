@@ -5,9 +5,13 @@ import logging
 from typing import Dict
 
 from ai_client import AIClient
+from constants import ProviderType
 from services.base_processor import BaseContentProcessor
 from services.article_processor import ArticleProcessor
 from services.social_media_processor import SocialMediaProcessor
+from services.instagram_processor import InstagramProcessor
+from services.tiktok_processor import TikTokProcessor
+from services.youtube_processor import YouTubeProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -18,15 +22,16 @@ class ProcessorFactory:
 
     Maps providers to the appropriate processor:
     - RSS, GOOGLE_SEARCH → ArticleProcessor (web articles)
-    - TIKTOK, INSTAGRAM → SocialMediaProcessor (social posts)
+    - TIKTOK, INSTAGRAM, YOUTUBE → Specialized processors (social media, no AI)
     """
 
     # Mapping of providers to processor classes
     _PROCESSOR_MAP = {
-        'RSS': ArticleProcessor,
-        'GOOGLE_SEARCH': ArticleProcessor,  # Google Search returns web articles
-        'TIKTOK': SocialMediaProcessor,
-        'INSTAGRAM': SocialMediaProcessor,
+        ProviderType.RSS: ArticleProcessor,
+        ProviderType.GOOGLE_SEARCH: ArticleProcessor,  # Google Search returns web articles
+        ProviderType.TIKTOK: TikTokProcessor,  # Lightweight processor for TikTok videos, no AI
+        ProviderType.INSTAGRAM: InstagramProcessor,  # Lightweight processor, no AI
+        ProviderType.YOUTUBE: YouTubeProcessor,  # Lightweight processor for YouTube videos, no AI
     }
 
     @classmethod
@@ -66,7 +71,14 @@ class ProcessorFactory:
 
         logger.info(f"Creating {processor_class.__name__} for provider: {provider}")
 
-        # Instantiate and return the processor
+        # Instagram, TikTok, and YouTube processors don't need AI client
+        if processor_class in (InstagramProcessor, TikTokProcessor, YouTubeProcessor):
+            return processor_class(
+                brands=brands,
+                config=config or {}
+            )
+
+        # Other processors need AI client
         return processor_class(
             ai_client=ai_client,
             brands=brands,

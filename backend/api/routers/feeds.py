@@ -84,6 +84,18 @@ async def create_feed(
     """
     repo = FeedRepository(db)
 
+    # Prepare config - convert feed_type to search_type for Instagram
+    config = feed_data.config or {}
+    if feed_data.provider.upper() == 'INSTAGRAM' and not config.get('search_type'):
+        # Map feed_type to search_type for Instagram
+        feed_type_mapping = {
+            'user': 'profile',     # UI uses 'user', backend uses 'profile'
+            'hashtag': 'hashtag',
+            'keyword': 'mentions',  # keyword searches use hashtag mentions
+        }
+        search_type = feed_type_mapping.get(feed_data.feed_type, 'mentions')
+        config['search_type'] = search_type
+
     # Create feed
     feed = repo.create(
         tenant_id=current_user.tenant_id,
@@ -93,7 +105,7 @@ async def create_feed(
         label=feed_data.label,
         enabled=feed_data.enabled,
         fetch_count=feed_data.fetch_count,
-        config=feed_data.config or {}
+        config=config
     )
 
     return schemas.FeedConfig.model_validate(feed)

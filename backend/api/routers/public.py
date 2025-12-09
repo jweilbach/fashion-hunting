@@ -92,24 +92,28 @@ async def get_overview(
 async def get_recent_reports(
     limit: int = Query(10, ge=1, le=50),
     skip: int = Query(0, ge=0),
+    source_type: str = Query(None, description="Filter by source type: social, digital, or broadcast"),
     current_user: User = Depends(require_viewer),
     db: Session = Depends(get_db)
 ):
     """
-    Get recent reports for current tenant with pagination
+    Get recent reports for current tenant with pagination, optionally filtered by source_type
 
     Returns:
     - Total count and paginated list of most recent reports
     """
+    # Build base query
+    query = db.query(Report).filter(Report.tenant_id == current_user.tenant_id)
+
+    # Apply source_type filter if provided
+    if source_type:
+        query = query.filter(Report.source_type == source_type)
+
     # Get total count
-    total = db.query(func.count(Report.id)).filter(
-        Report.tenant_id == current_user.tenant_id
-    ).scalar() or 0
+    total = query.count()
 
     # Get paginated reports
-    reports = db.query(Report).filter(
-        Report.tenant_id == current_user.tenant_id
-    ).order_by(desc(Report.timestamp)).offset(skip).limit(limit).all()
+    reports = query.order_by(desc(Report.timestamp)).offset(skip).limit(limit).all()
 
     return {
         "total": total,
@@ -119,6 +123,7 @@ async def get_recent_reports(
                 "title": report.title,
                 "source": report.source,
                 "provider": report.provider,
+                "source_type": report.source_type,
                 "timestamp": report.timestamp.isoformat() if report.timestamp else None,
                 "summary": report.summary,
                 "brands": report.brands or [],

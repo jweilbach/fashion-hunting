@@ -105,12 +105,13 @@ Selenium resolver error: Message: timeout: Timed out receiving message from rend
 ---
 
 ### 2. Duplicate Logging with Celery Multiprocessing
-**Status**: Known Limitation
+**Status**: Fixed
 **Priority**: Medium
 **Date Identified**: 2025-11-08
+**Date Fixed**: 2025-11-08
 
 **Description**:
-When running Celery workers with `concurrency=2` (or higher), all log entries appear duplicated in both console output and log files. This occurs because each worker process independently executes the `after_setup_logger` signal handler and adds handlers to its own root logger instance.
+When running Celery workers with `concurrency=2` (or higher), all log entries appeared duplicated in both console output and log files. This occurred because each worker process independently executed the `after_setup_logger` signal handler and added handlers to its own root logger instance.
 
 **Examples**:
 ```
@@ -121,44 +122,46 @@ When running Celery workers with `concurrency=2` (or higher), all log entries ap
 ```
 
 **Impact**:
-- Log files grow twice as fast as expected
-- Console output is cluttered with duplicate entries
-- Makes it harder to read logs during debugging
-- Each worker legitimately logs its own startup/shutdown messages (which is technically correct but visually confusing)
+- Log files grew twice as fast as expected
+- Console output was cluttered with duplicate entries
+- Made it harder to read logs during debugging
+- Each worker legitimately logged its own startup/shutdown messages (which was technically correct but visually confusing)
 
 **Root Cause**:
 Celery's `prefork` pool creates separate worker processes via forking. Each process gets its own copy of the Python logging module state and independently logs to the same handlers (console and file).
 
-**Workarounds Attempted**:
-1. ❌ Using global flag to prevent duplicate handler setup - doesn't work across forked processes
-2. ❌ Queue-based logging (QueueHandler/QueueListener) - caused `BrokenPipeError` due to multiprocessing.Queue created before fork
+**Fix Applied**:
+Configured the Celery logger using the `after_setup_logger` signal to properly clear and set up handlers:
 
-**Potential Solutions** (not yet implemented):
-1. **Redis-based log aggregation** (Quick win - uses existing Redis infrastructure)
-   - Each worker writes to Redis stream/list
-   - Single process reads and writes to file
-   - Natural deduplication
-   - Pros: Fast to implement, scales to any concurrency
-   - Cons: Adds Redis dependency for logging
+```python
+# Lines 83-105 in backend/celery_app/celery.py
+@after_setup_logger.connect
+def setup_celery_logger(**kwargs):
+    """Configure Celery logger with our custom format"""
+    from api.logging_config import LOG_FORMAT, DATE_FORMAT
+    import sys
 
-2. **External logging service** (Production-ready)
-   - CloudWatch, Datadog, New Relic (managed, costs money)
-   - ELK Stack (self-hosted, free but requires infrastructure)
-   - Pros: Full-featured, built-in deduplication, great for production
-   - Cons: Requires setup and possibly costs
+    # Configure the root logger
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.setLevel(logging.INFO)
 
-3. **Process ID filtering** (Simple fix)
-   - Only log from main Celery process, filter out worker process logs
-   - Pros: Simple to implement
-   - Cons: Might miss important worker-specific errors
+    # File handler for persistent logs
+    log_file = Path(__file__).parent.parent / "logs" / "celery_worker.log"
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT))
+    root_logger.addHandler(file_handler)
 
-4. **Accept as known behavior**
-   - Document that 2 workers = 2 "ready" messages (semantically correct)
-   - Focus on feature development instead
-   - Add proper logging infrastructure when scaling to production
+    # Console handler for real-time output
+    console_handler = logging.StreamHandler(sys.__stdout__)
+    console_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT))
+    root_logger.addHandler(console_handler)
+```
 
-**Recommendation**:
-Implement Redis-based logging when ready to scale, or adopt a managed logging service (CloudWatch/Datadog) for production deployments.
+**Result**:
+- Log entries no longer duplicated
+- Clean console output
+- Consistent logging format across all workers
 
 **Related Files**:
 - `backend/celery_app/celery.py` (lines 80-100)
@@ -1246,7 +1249,1014 @@ CREATE TABLE email_drafts (
 2. **Missing unit tests**: Need comprehensive test coverage for providers, services, and API endpoints
 3. **Database migrations**: Need proper migration system (Alembic) for schema changes
 4. **Configuration management**: Move hardcoded values to environment variables or config files
+5. **Job Execution Service needs Provider Factory pattern**: The `job_execution_service.py` currently uses manual provider handling with separate methods for each provider (`_fetch_from_instagram()`, `_fetch_from_tiktok()`, `_fetch_from_youtube()`, etc.). This approach doesn't scale well and requires 5+ code changes per new provider. Should be refactored to use a Provider Factory pattern similar to the existing `ProcessorFactory`, where providers are instantiated dynamically based on feed configuration. Benefits: single point of change, cleaner code, easier testing, better maintainability. Estimated effort: 3-4 hours. Related files: `backend/src/services/job_execution_service.py`, `backend/src/providers/`
+6. **Duplicate brand extraction logic across social media processors**: The brand extraction/matching logic is duplicated across `instagram_processor.py`, `tiktok_processor.py`, and `youtube_processor.py` with slight variations (hashtag matching vs. text matching). Each processor has its own `_extract_brands_from_*()` method implementing similar logic. This creates maintenance burden - any bug fix or improvement must be applied to 3+ places. Should be refactored into a shared `BrandMatcher` utility class with methods like `match_in_hashtags()`, `match_in_text()`, `match_in_mentions()` that all processors can use. Benefits: single source of truth for brand matching logic, consistent behavior across all platforms, easier to add new matching strategies (fuzzy matching, machine learning), easier testing. Estimated effort: 2-3 hours. Related files: `backend/src/services/instagram_processor.py:135-176`, `backend/src/services/tiktok_processor.py:140-171`, `backend/src/services/youtube_processor.py:141-172`
 
 ---
 
-*Last Updated: 2025-11-08*
+## PR Firm Feature Requests
+*Based on field research conducted 2025-11-19*
+
+**Strategic Positioning**: Marketing Hunting aims to **replace** the current fragmented toolset used by PR firms:
+- **MuckRack**: Digital press monitoring and media contact database
+- **TVEyes**: Live TV broadcast monitoring
+- **Tribe Dynamics**: Social media tracking and influencer content monitoring
+
+Currently, PR firms pay for 3+ separate platforms with overlapping functionality. Marketing Hunting will be the **all-in-one PR intelligence platform** that consolidates media monitoring, contact management, and outreach automation into a single system.
+
+---
+
+## Technical Infrastructure: Apify Integration Strategy
+
+**Apify** is a web scraping and automation platform with 7,000+ pre-built "Actors" (scraping tools) that will **dramatically accelerate** our development timeline and provide enterprise-grade infrastructure.
+
+### Why Apify is Perfect for Marketing Hunting
+
+| Challenge | Apify Solution | Impact |
+|-----------|---------------|---------|
+| Social media scraping complexity | Pre-built Instagram, TikTok, YouTube scrapers | **Reduce 7-10 day build to 2-3 days integration** |
+| Anti-bot detection | Built-in IP rotation, CAPTCHA solving | No need to build custom evasion |
+| Scale infrastructure | Cloud-based, handles millions of pages | No DevOps overhead |
+| Legal compliance | SOC2, GDPR, CCPA certified | Enterprise-ready from day 1 |
+| Maintenance burden | Actors maintained by Apify/community | Scrapers stay working when sites change |
+
+### Apify Coverage for Our Features
+
+#### **1. Social Media Monitoring (Tribe Dynamics Replacement) - Feature #2**
+**Apify Actors Available:**
+- ✅ **Instagram Scraper** - Posts, profiles, hashtags, comments, stories, reels
+- ✅ **TikTok Scraper** - Videos, profiles, hashtags, engagement metrics
+- ✅ **YouTube Scraper** - Videos, channels, comments, engagement
+- ✅ **Twitter/X Scraper** - Tweets, profiles, hashtags
+- ✅ **Social Insight Scraper** - Multi-platform monitoring (all-in-one)
+- ✅ **Social Media Influencer Scraper** - Influencer discovery and metrics
+
+**Cost:** ~$45-75/month for Actor rentals + usage credits
+**Time Saved:** 7-10 days → 2-3 days (build API integration instead of scraper)
+
+**Implementation:**
+```python
+# Instead of building Instagram scraper from scratch
+from apify_client import ApifyClient
+
+client = ApifyClient(os.getenv('APIFY_API_TOKEN'))
+
+# Run Instagram scraper for brand mentions
+run = client.actor("apify/instagram-scraper").call(run_input={
+    "search": "#ColorWow OR @ColorWow",
+    "resultsLimit": 100,
+})
+
+# Fetch scraped posts
+for item in client.dataset(run["defaultDatasetId"]).iterate_items():
+    # Process influencer post
+    save_to_reports(item)
+```
+
+---
+
+#### **2. LinkedIn Scraping for Editor Contact Discovery - Feature #5**
+**Apify Actors Available:**
+- ✅ **LinkedIn Profile Scraper** - Profile data, job history, contact info
+- ✅ **LinkedIn Company Scraper** - Employee lists, company info
+- ✅ **LinkedIn Search Scraper** - Search for editors by title/company
+- ✅ **Social Handle Scraper** - Extract social handles from websites
+
+**Cost:** ~$20-30/month per Actor
+**Time Saved:** 3-4 days → 1-2 days
+
+**Use Case:**
+- Find all "Beauty Editor" profiles at Vogue, Allure, Byrdie
+- Extract contact info and recent activity
+- Auto-populate editor database
+
+---
+
+#### **3. Podcast Monitoring - Feature #9**
+**Apify Actors Available:**
+- ✅ **Apple Podcasts Scraper** - Podcast metadata, episodes, ratings
+- ✅ **Spotify Podcast Scraper** - Episodes, descriptions, hosts
+- ✅ **YouTube Video Scraper** - Podcast episodes uploaded to YouTube
+
+**Cost:** ~$10-20/month
+**Time Saved:** 2-3 days → 1 day
+
+---
+
+#### **4. News Article Scraping Enhancement**
+**Apify Actors Available:**
+- ✅ **Web Scraper** (General) - Extract structured data from any website
+- ✅ **Google News Scraper** - Already using Google News, but Apify can enhance
+- ✅ **Article Scraper** - Clean article extraction (better than our current method)
+
+**Current Pain Point:** We're building custom scrapers for each publication
+**Apify Solution:** Use general Web Scraper Actor + AI extraction
+
+---
+
+#### **5. What Apify Can't Do (We Still Need to Build)**
+
+❌ **Broadcast TV Monitoring** - No pre-built closed caption scrapers for live TV
+   - **Alternative:** Partner with CC data providers or build custom
+
+❌ **AI Brand Extraction** - Apify scrapes content, but we need AI to extract brands
+   - **Solution:** Use scraped content as input to our existing AI pipeline
+
+❌ **Multi-LLM Comparison** - Feature #6 requires custom LLM orchestration
+   - **Solution:** Build in-house (this is our differentiator)
+
+❌ **Editor Contact CRM** - Database and relationship management
+   - **Solution:** Build custom (this is core IP)
+
+---
+
+### Recommended Apify Implementation Strategy
+
+#### **Phase 1: Immediate Wins (Week 1-2)**
+1. **Instagram Scraper** - Replace manual Instagram monitoring
+   - Actor: `apify/instagram-scraper`
+   - Cost: $45/month + usage
+   - Integration: 2 days
+
+2. **TikTok Scraper** - Brand mention tracking
+   - Actor: `clockworks/tiktok-scraper`
+   - Cost: $45/month + usage
+   - Integration: 1 day
+
+3. **LinkedIn Profile Scraper** - Editor discovery
+   - Actor: `apify/linkedin-profile-scraper`
+   - Cost: $30/month + usage
+   - Integration: 2 days
+
+**Total Phase 1 Cost:** ~$120/month + $50-100 usage = **$170-220/month**
+**Time Saved:** ~8-10 days of development work
+
+---
+
+#### **Phase 2: Expansion (Week 3-4)**
+4. **YouTube Scraper** - Video brand mentions
+5. **Apple Podcasts Scraper** - Podcast discovery
+6. **Twitter/X Scraper** - Tweet monitoring
+7. **Article Scraper** - Better article extraction
+
+**Total Phase 2 Cost:** +$60-80/month = **$230-300/month total**
+
+---
+
+### Cost-Benefit Analysis
+
+**Building from Scratch:**
+- Instagram scraper: 5-7 days @ $100/hr = $4,000-5,600
+- TikTok scraper: 4-5 days = $3,200-4,000
+- LinkedIn scraper: 3-4 days = $2,400-3,200
+- Maintenance: ~20 hours/month = $2,000/month
+- **Total First Year:** $60,000-80,000
+
+**Using Apify:**
+- Setup/integration: 5-7 days = $4,000-5,600 (one-time)
+- Monthly cost: $300/month = $3,600/year
+- Maintenance: ~2 hours/month = $200/month = $2,400/year
+- **Total First Year:** $10,000-11,600
+
+**Savings: $50,000-68,000 in Year 1** 💰
+
+---
+
+### Apify Pricing Breakdown
+
+**Recommended Plan:** Apify Team Plan
+- **Cost:** $499/month base
+- **Includes:** $500 platform credits, team collaboration, priority support
+- **Actor Rentals:** ~$200-300/month for needed Actors
+- **Total:** ~$700-800/month
+
+**Compare to Competitors:**
+- Tribe Dynamics: $2,000-5,000/month ❌
+- MuckRack contact database: $800-1,000/month ❌
+- Custom dev team: $10,000+/month ❌
+
+**Apify ROI:** We save $10k-20k/month vs. building + competing tools 📈
+
+---
+
+### Risk Mitigation
+
+**Concern:** Vendor lock-in with Apify
+**Mitigation:**
+- All scraped data stored in our database
+- Can build custom scrapers later if needed
+- Apify Actors are replaceable (use alternative scrapers)
+
+**Concern:** Actor reliability (maintained by 3rd parties)
+**Mitigation:**
+- Most critical Actors maintained by Apify (official)
+- Monitor Actor performance, have backup Actors
+- Build custom fallback scrapers for critical features
+
+**Concern:** Cost scaling
+**Mitigation:**
+- Monitor usage closely
+- Implement caching to reduce scraping frequency
+- Optimize scraping runs (don't re-scrape same content)
+
+---
+
+### Implementation Checklist
+
+**Week 1: Setup & Instagram**
+- [ ] Sign up for Apify Team plan ($499/month)
+- [ ] Get API credentials
+- [ ] Set up `apify-client` in Python backend
+- [ ] Integrate Instagram Scraper Actor
+- [ ] Test brand mention tracking for 3-5 brands
+- [ ] Set up scheduled runs (daily scraping)
+- [ ] Build database ingestion pipeline
+
+**Week 2: TikTok & LinkedIn**
+- [ ] Integrate TikTok Scraper Actor
+- [ ] Test influencer discovery and tracking
+- [ ] Integrate LinkedIn Profile Scraper
+- [ ] Build editor auto-discovery pipeline
+- [ ] Test contact enrichment for 10-20 editors
+
+**Week 3: YouTube & Podcasts**
+- [ ] Integrate YouTube Scraper
+- [ ] Set up video brand mention detection
+- [ ] Integrate Apple Podcasts Scraper
+- [ ] Build podcast discovery feature
+
+**Week 4: Optimization & Monitoring**
+- [ ] Optimize scraping schedules to minimize costs
+- [ ] Implement caching and deduplication
+- [ ] Set up monitoring dashboards for Apify usage
+- [ ] Document all Actor integrations
+
+---
+
+## Alternative Scraping Platforms Comparison
+
+### **Top Competitors to Apify (2025)**
+
+| Platform | Best For | Social Media Support | Pricing Model | Pros | Cons |
+|----------|----------|---------------------|---------------|------|------|
+| **Apify** | Pre-built actors, ease of use | ✅ Instagram, TikTok, YouTube, Twitter, LinkedIn | $499/month Team + usage credits | 7,000+ actors, great documentation, easy integration | Can get expensive at scale |
+| **Bright Data** | Enterprise scale, compliance | ✅ All major platforms + geo-targeting | Pay-as-you-go, enterprise pricing | Best proxy network, 99%+ success rate, compliance support | Expensive ($500-2k+/month) |
+| **ScraperAPI** | Developer-friendly API | ✅ Instagram, LinkedIn, general scraping | $49-$249/month tiered | Simple API, auto IP rotation, CAPTCHA solving | Fewer pre-built social scrapers |
+| **ScrapeCreators** | Real-time social APIs | ✅ TikTok, Instagram, YouTube, Twitter/X, Reddit | Starting $10/5k credits | 100+ endpoints, clean JSON, affordable | Newer platform, less proven |
+| **Zyte** | Speed & reliability | ✅ Instagram (99%+ success), general web | Custom enterprise pricing | Fastest Instagram scraper (2.63s avg), 99%+ success | Expensive, enterprise-focused |
+| **Octoparse** | No-code scraping | ✅ TikTok, Instagram, LinkedIn, Twitter/X | Free tier + $75-$249/month | No coding needed, visual interface | Limited API, less flexible |
+
+---
+
+### **Recommendation: Multi-Platform Strategy**
+
+Instead of going all-in on one platform, consider a **hybrid approach**:
+
+#### **Primary: Apify ($499-800/month)**
+Use for:
+- ✅ Instagram, TikTok, YouTube (pre-built actors)
+- ✅ LinkedIn scraping (editor discovery)
+- ✅ Podcast directories (Apple Podcasts, Spotify)
+- ✅ General web scraping (article extraction)
+
+**Why:** Best balance of pre-built tools, ease of use, and developer experience. Huge time savings.
+
+---
+
+#### **Secondary: Bright Data (Pay-as-you-go, ~$200-500/month)**
+Use for:
+- ✅ High-volume Instagram/TikTok scraping (better success rates)
+- ✅ Geo-targeted scraping (international brand mentions)
+- ✅ Enterprise compliance needs
+- ✅ Backup when Apify actors fail
+
+**Why:** Superior proxy network and success rates. Use selectively for critical/high-volume scraping.
+
+---
+
+#### **Tertiary: ScrapeCreators ($10-50/month)**
+Use for:
+- ✅ Real-time TikTok/Instagram data (faster than Apify)
+- ✅ Testing and POC work
+- ✅ Low-volume, specific endpoint needs
+
+**Why:** Extremely affordable for testing. Good for specific use cases.
+
+---
+
+### **Cost Comparison: Hybrid vs. Single Platform**
+
+**Option 1: Apify Only**
+- Monthly cost: $700-800
+- Coverage: 90% of needs
+- Risk: Single vendor lock-in, potential reliability issues
+
+**Option 2: Hybrid (Recommended)**
+- Apify: $500-600 (reduced usage)
+- Bright Data: $200-300 (pay-as-you-go for critical scraping)
+- ScrapeCreators: $10-20 (testing/backup)
+- **Total: $710-920/month**
+- Coverage: 99% of needs
+- Benefits: Redundancy, best tool for each job, no single point of failure
+
+**Option 3: Bright Data Only**
+- Monthly cost: $1,500-3,000+
+- Coverage: 100% of needs
+- Problem: Way too expensive, overkill for our needs
+
+---
+
+### **Decision Matrix: Which Platform for Which Feature?**
+
+| Feature | Best Platform | Backup Platform | Notes |
+|---------|--------------|-----------------|-------|
+| **Instagram Scraper** | Apify | Bright Data | Apify has ready actors, Bright Data for scale |
+| **TikTok Scraper** | Apify | ScrapeCreators | Both work well, ScrapeCreators is real-time |
+| **YouTube Scraper** | Apify | ScraperAPI | YouTube API may be better than scraping |
+| **LinkedIn Scraper** | Apify | Bright Data | LinkedIn is restrictive, may need both |
+| **Podcast Scraping** | Apify | RSS feeds directly | Apify has Apple Podcasts/Spotify actors |
+| **Article Extraction** | Apify | Custom (newspaper3k) | Can build custom as fallback |
+| **General Web Scraping** | Apify | ScraperAPI | Apify Web Scraper actor is excellent |
+
+---
+
+### **Final Recommendation**
+
+**Start with Apify exclusively** for first 1-2 months:
+- Lowest risk, fastest implementation
+- Evaluate performance and costs
+- Identify gaps or failure points
+
+**Add Bright Data selectively** if you hit issues:
+- Only for high-failure-rate targets (e.g., LinkedIn)
+- Geo-specific scraping needs
+- Enterprise client compliance requirements
+
+**Keep ScrapeCreators as cheap backup**:
+- Real-time social media endpoints
+- Development/testing environment
+- Failover when primary platforms have issues
+
+**Estimated Monthly Costs:**
+- **Month 1-2:** $500-800 (Apify only)
+- **Month 3+:** $700-1,000 (Apify + selective Bright Data + ScrapeCreators)
+
+**vs. Building Everything In-House:** $5,000-10,000/month (dev time + infrastructure + maintenance)
+
+**Savings: $48,000-110,000/year** 💰
+
+---
+
+### 1. Event Coverage Tracking & Tag Monitoring
+**Priority**: High
+**Category**: Social Media & Event Management
+**Estimate**: 3-4 days
+
+**Business Context**:
+PR firms host events (e.g., 70 attendees) and need to track all social media posts, stories, and articles where attendees tagged brands or mentioned the event. Current manual process is extremely time-consuming.
+
+**Current Pain Point**:
+- Manually searching through Instagram stories, posts, Twitter/X, TikTok
+- No centralized way to see all brand mentions from event attendees
+- Difficult to measure event ROI and brand exposure
+
+**Desired Features**:
+- [ ] Social media monitoring for event hashtags and brand tags
+- [ ] Aggregate all Instagram/TikTok stories mentioning brands
+- [ ] Track who attended and who posted about the event
+- [ ] Generate event coverage reports with metrics (reach, engagement, brand mentions)
+- [ ] Integration with Tribe Dynamics (social media tracking platform)
+- [ ] Automatically collect notifications from authorized social media accounts
+
+**Related to**: Tribe Dynamics integration, Social media scraping
+
+---
+
+### 2. Social Media Tracking & Influencer Monitoring (Tribe Dynamics Replacement)
+**Priority**: Critical
+**Category**: Social Media Intelligence
+**Estimate**: 7-10 days
+
+**Competitive Context**:
+**Tribe Dynamics** is currently used for social media tracking and influencer content monitoring. We need to **replace** this functionality entirely, not integrate with it.
+
+**What Tribe Dynamics Does**:
+- Tracks influencer posts mentioning brands
+- Monitors Instagram Stories, TikTok, YouTube content
+- Calculates influencer reach and engagement
+- Measures earned media value (EMV) from influencer posts
+- Identifies which influencers are organically mentioning brands
+
+**Our Replacement Features**:
+- [ ] Instagram monitoring (posts, stories, reels, mentions)
+- [ ] TikTok video tracking (brand mentions, hashtags)
+- [ ] YouTube video monitoring (product mentions, reviews)
+- [ ] Twitter/X brand mention tracking
+- [ ] Influencer identification (who's posting about brands)
+- [ ] Engagement metrics (likes, comments, shares, reach)
+- [ ] Earned Media Value (EMV) calculation
+- [ ] Influencer database with reach/engagement stats
+- [ ] Automated influencer discovery (find new people posting about brands)
+- [ ] Gifting ROI tracking (track which influencers posted after receiving products)
+- [ ] Competitor influencer analysis (who's posting about competing brands)
+
+**Technical Approach**:
+- Social media APIs (Instagram Graph API, TikTok API, YouTube Data API)
+- Web scraping where APIs are limited (Instagram Stories)
+- Computer vision for product recognition in images/videos
+- NLP for brand mention extraction from captions
+
+**Why We'll Win**:
+- Unified platform (don't need separate tool)
+- Real-time alerts vs. delayed reporting
+- Better AI for brand mention detection
+- Integrated with article monitoring (see full media picture)
+
+---
+
+### 3. Broadcast TV & News Segment Monitoring (TVEyes Replacement)
+**Priority**: High
+**Category**: Broadcast Media Intelligence
+**Estimate**: 10-14 days
+
+**Competitive Context**:
+**TVEyes** is currently the go-to tool for live TV broadcast monitoring, but PR firms report it "might not get everything." We need to **replace** TVEyes with better, more comprehensive broadcast monitoring.
+
+**What TVEyes Does**:
+- Monitors live TV broadcasts across major networks
+- Closed caption/subtitle search for brand mentions
+- Provides video clips of brand mentions
+- Archives broadcast content
+- Email alerts for brand mentions on TV
+
+**Our Replacement Features**:
+- [ ] Live TV monitoring across all major news networks (CNN, Fox, MSNBC, etc.)
+- [ ] Closed caption scraping and indexing
+- [ ] Real-time speech-to-text transcription (backup to closed captions)
+- [ ] Brand mention detection in transcripts
+- [ ] Video clip extraction and storage
+- [ ] Link TV segments to corresponding online articles
+- [ ] Immediate alerts when clients mentioned on air
+- [ ] Broadcast analytics (airtime, reach, sentiment)
+- [ ] Morning show tracking (Today Show, GMA, etc.)
+- [ ] Late night show monitoring (Tonight Show, Kimmel, etc.)
+- [ ] Local news monitoring (major markets)
+- [ ] Manual video upload for analysis (for content we missed)
+
+**Technical Approach**:
+
+**Phase 1: Closed Caption Scraping (Week 1-2)**
+- Partner with closed caption data providers (e.g., TV Eyes API, or direct CC feeds)
+- Alternative: Scrape CC data from network websites
+- Index captions in real-time searchable database
+- Brand mention detection via keyword matching + NLP
+
+**Phase 2: Video Clip Recording (Week 2-3)**
+- Record live TV streams (legally via streaming services or cable)
+- Store segments containing brand mentions
+- Video storage and CDN integration
+
+**Phase 3: Audio Transcription Backup (Week 3-4)**
+- Use Whisper API or AWS Transcribe for audio → text
+- Cross-reference with closed captions for accuracy
+- Handle segments where CC is unavailable
+
+**Why We'll Win**:
+- TVEyes is expensive and clunky
+- We provide unified dashboard (articles + social + TV)
+- Better AI for brand mention detection (catches more)
+- Real-time alerts (faster than TVEyes)
+- Integrated analytics (compare TV mentions to article spikes)
+- Lower cost (bundled with other features vs. separate subscription)
+
+---
+
+### 4. Print Media Monitoring (PressReader Integration)
+**Priority**: Medium
+**Category**: Media Monitoring
+**Estimate**: 4-5 days
+
+**Business Context**:
+PressReader is used to search actual printed media (newspapers, magazines). Need integration to monitor print publications for brand mentions.
+
+**Acceptance Criteria**:
+- [ ] Integration with PressReader API
+- [ ] Search print publications for brand mentions
+- [ ] OCR for scanned print media (if not available via API)
+- [ ] Track magazine feature placements
+- [ ] Link print mentions to digital versions (if available)
+
+**Research Needed**:
+- [ ] PressReader API availability and pricing
+- [ ] Alternative print media databases
+- [ ] OCR quality for print scanning
+
+---
+
+### 5. Media Contact Database & Editor Tracking (MuckRack Replacement)
+**Priority**: Critical
+**Category**: Contact Intelligence & CRM
+**Estimate**: 8-10 days
+
+**Competitive Context**:
+**MuckRack** (and Cision) are the industry-standard media contact databases. PR firms pay $7k-12k/year per seat for these tools. We need to **replace** MuckRack by building a superior, automatically-updated media contact database.
+
+**What MuckRack Does**:
+- Database of journalists, editors, reporters with contact info
+- Track who writes about what topics ("beats")
+- Search for editors covering specific topics
+- Contact information (email, phone, social media)
+- Article history for each journalist
+- Media outlet information
+- Pitch tracking (who you've contacted)
+- Press release distribution
+
+**Our Replacement Features**:
+
+**Phase 1: Automated Editor Discovery (Days 1-4)**
+- [ ] Automatically detect new bylines from tracked publications
+- [ ] Extract author names from articles we're already monitoring
+- [ ] Build editor profiles automatically (no manual data entry)
+- [ ] Track beat/topic for each editor based on article content
+- [ ] Alert when new editors start covering relevant topics
+- [ ] Track editor beat changes (e.g., beauty editor moves to fashion)
+- [ ] Show writing history and recent articles for each editor
+- [ ] Identify trending editors (who's writing more frequently)
+
+**Phase 2: Contact Information Discovery (Days 5-7)**
+- [ ] LinkedIn scraping for editor profiles
+- [ ] Email pattern detection (common formats by publication)
+- [ ] Twitter/X account linking
+- [ ] Automated contact info enrichment
+- [ ] Contact verification (check if email still valid)
+- [ ] Track contact information changes over time
+
+**Phase 3: Pitch Intelligence (Days 8-10)**
+- [ ] "Suggest Pitch Targets" based on article content analysis
+- [ ] Show editor's writing style and preferences
+- [ ] Recent article topics for context
+- [ ] Best time to pitch (analyze publishing patterns)
+- [ ] Competitive advantage: editors NOT in MuckRack (find them first)
+- [ ] Pitch tracking (who you've contacted, when, response rate)
+- [ ] Relationship scoring (how responsive are they)
+
+**Why We'll Win Over MuckRack**:
+- **Automatic updates**: MuckRack data is manually curated and often stale. We discover editors the moment they publish.
+- **First-mover advantage**: Find new editors before they're in MuckRack
+- **Better context**: See exactly what they wrote recently, not just their bio
+- **Integrated workflow**: From finding article → finding editor → pitching, all in one place
+- **AI-powered matching**: Smart suggestions for who to pitch based on article content
+- **Lower cost**: Bundled with media monitoring vs. separate $10k/year tool
+- **Real-time**: MuckRack updates quarterly, we update daily
+
+**Database Schema**:
+```sql
+CREATE TABLE editors (
+    id UUID PRIMARY KEY,
+    full_name VARCHAR(255),
+    publication VARCHAR(255),
+    beat VARCHAR(255), -- e.g., "Beauty", "Fashion", "Lifestyle"
+    first_seen_date TIMESTAMP,
+    last_article_date TIMESTAMP,
+    article_count INTEGER,
+    topics TEXT[], -- Array of topics they cover
+    email VARCHAR(255),
+    phone VARCHAR(50),
+    twitter_handle VARCHAR(100),
+    linkedin_url TEXT,
+    contact_verified BOOLEAN DEFAULT false,
+    contact_last_verified TIMESTAMP,
+    writing_frequency VARCHAR(50), -- daily, weekly, monthly
+    preferred_topics TEXT[],
+    pitch_response_rate FLOAT, -- % of pitches that got response
+    last_pitched_at TIMESTAMP,
+    contact_info_id UUID REFERENCES brand_contacts(id)
+);
+
+CREATE TABLE editor_articles (
+    id UUID PRIMARY KEY,
+    editor_id UUID REFERENCES editors(id),
+    report_id UUID REFERENCES reports(id),
+    published_date TIMESTAMP,
+    topics TEXT[]
+);
+```
+
+---
+
+### 6. AI-Powered Search Query Results & Multi-LLM Comparison
+**Priority**: High
+**Category**: AI & Search
+**Estimate**: 4-5 days
+
+**Business Context**:
+PR teams need to answer natural language queries like "I have really chapped lips" and find relevant articles. They want to compare results from different AI models (ChatGPT, Gemini, Claude) and see which brands are mentioned, editor recommendations vs. expert recommendations.
+
+**Use Case Example**:
+1. User inputs query: "I have really chapped lips"
+2. System queries ChatGPT, Gemini, Claude
+3. Each LLM returns recommended articles
+4. System fetches and analyzes those articles
+5. Extract: brands mentioned, editor recommendations, expert quotes
+6. Compare recommendations across LLMs
+7. Generate summary report
+
+**Desired Features**:
+- [ ] Natural language search interface
+- [ ] Multi-LLM query (ChatGPT, Gemini, Claude in parallel)
+- [ ] Fetch and analyze articles recommended by each LLM
+- [ ] Extract brand mentions from recommended articles
+- [ ] Distinguish between editor recommendations vs. expert recommendations
+- [ ] Compare which brands each LLM recommended
+- [ ] Show overlap and differences between LLM results
+- [ ] Export comparison results
+
+**Acceptance Criteria**:
+- [ ] Search page with natural language query input
+- [ ] "Compare LLMs" toggle to run query across multiple models
+- [ ] Side-by-side comparison view of LLM results
+- [ ] Highlight which brands were recommended by each LLM
+- [ ] Tag recommendations as "Editor Pick" vs "Expert Rec"
+- [ ] Summary showing consensus vs. unique recommendations
+
+**UI Mockup**:
+```
+┌─────────────────────────────────────────────────────────┐
+│ Query: "I have really chapped lips"                    │
+│ [Search with ChatGPT] [Gemini] [Claude] [All]          │
+└─────────────────────────────────────────────────────────┘
+
+┌──────────┬──────────┬──────────┐
+│ ChatGPT  │  Gemini  │  Claude  │
+├──────────┼──────────┼──────────┤
+│ • Aquaphor│ • Aquaphor│ • Vaseline│
+│ • Vaseline│ • La Roche│ • Aquaphor│
+│ • Laneige │   Posay   │ • Burt's  │
+│           │ • Vaseline│   Bees    │
+└──────────┴──────────┴──────────┘
+
+Consensus: Aquaphor (3/3), Vaseline (2/3)
+```
+
+---
+
+### 7. Social Media Credential Management & Auto-Collection
+**Priority**: Medium
+**Category**: Social Media Automation
+**Estimate**: 3-4 days
+
+**Business Context**:
+Brands like Color Wow give products to influencers, and PR teams need to monitor when those influencers post about the products. Some firms manually check notifications, but this should be automated.
+
+**Desired Features**:
+- [ ] Store social media account credentials (secure)
+- [ ] Automatically collect notifications from Instagram, TikTok, Twitter/X
+- [ ] Filter notifications for brand mentions and product tags
+- [ ] Aggregate posts from gifted influencers
+- [ ] Track influencer engagement and reach
+- [ ] Generate influencer ROI reports
+
+**Security Considerations**:
+- [ ] Encrypted credential storage
+- [ ] OAuth integration where possible (avoid storing passwords)
+- [ ] Per-client credential isolation
+- [ ] Audit log for credential access
+
+---
+
+### 8. Export to Google Sheets/Docs
+**Priority**: Low (Easy Win)
+**Category**: Data Export
+**Estimate**: 1 day
+
+**Description**:
+Users want to export reports, brand mentions, and analytics to Google Sheets or Google Docs for sharing with clients and team collaboration.
+
+**Acceptance Criteria**:
+- [ ] "Export to Google Sheets" button on reports page
+- [ ] "Export to Google Docs" for formatted reports
+- [ ] Configure which columns/fields to export
+- [ ] Google OAuth integration
+- [ ] Export filters (date range, brands, publications)
+- [ ] Schedule automated exports (daily/weekly reports to Sheets)
+
+**Technical Approach**:
+- Google Sheets API integration
+- Google Docs API for formatted reports
+- OAuth 2.0 for authentication
+
+---
+
+### 9. Podcast Monitoring & Media List Management
+**Priority**: High
+**Category**: Media Monitoring & Contact Management
+**Estimate**: 5-7 days
+
+**Business Context**:
+PR firms want to pitch clients to appear on podcasts. Need to find relevant podcasts, track podcast mentions of brands/topics, and build podcast media lists.
+
+**Use Case Example**:
+- Client: Color Wow (hair care brand) with founder available for interviews
+- Goal: Find beauty/lifestyle podcasts to pitch founder appearance
+- Need: List of podcasts covering beauty, hair care, entrepreneurship
+
+**Desired Features**:
+
+**Phase 1: Podcast Discovery & Tracking (3 days)**
+- [ ] Search podcast directories (Apple Podcasts, Spotify, etc.)
+- [ ] Filter by category, audience size, topic
+- [ ] Track podcasts covering specific beats (beauty, fashion, lifestyle)
+- [ ] Store podcast metadata (host, episode frequency, audience size)
+- [ ] Monitor new podcast episodes for brand mentions
+
+**Phase 2: Podcast Media Lists (2 days)**
+- [ ] Create curated podcast media lists by category
+- [ ] Tag podcasts with relevant topics/beats
+- [ ] Store host contact information
+- [ ] Track pitch history (which podcasts were pitched when)
+- [ ] Shared media lists across organization
+
+**Phase 3: Podcast Content Analysis (2 days)**
+- [ ] Transcribe podcast episodes (Whisper API, AssemblyAI)
+- [ ] Extract brand mentions from transcripts
+- [ ] Identify when competitors appear on podcasts
+- [ ] Alert when relevant topics are discussed
+
+**Acceptance Criteria**:
+- [ ] Podcast search and discovery page
+- [ ] Podcast database with metadata (host, contact, category, audience)
+- [ ] "Create Media List" feature for podcasts
+- [ ] Tag and categorize podcasts by topic
+- [ ] Track brand mentions in podcast episodes
+- [ ] Export podcast media lists
+- [ ] Pitch tracking for podcast outreach
+
+**Database Schema**:
+```sql
+CREATE TABLE podcasts (
+    id UUID PRIMARY KEY,
+    title VARCHAR(255),
+    description TEXT,
+    host_name VARCHAR(255),
+    host_email VARCHAR(255),
+    category VARCHAR(100), -- Beauty, Fashion, Business, etc.
+    platform VARCHAR(50), -- Apple, Spotify, etc.
+    audience_size INTEGER,
+    episode_frequency VARCHAR(50),
+    last_episode_date TIMESTAMP,
+    topics TEXT[]
+);
+
+CREATE TABLE podcast_media_lists (
+    id UUID PRIMARY KEY,
+    name VARCHAR(255),
+    description TEXT,
+    category VARCHAR(100),
+    created_by UUID,
+    shared_across_tenants BOOLEAN DEFAULT false,
+    podcasts UUID[] -- Array of podcast IDs
+);
+```
+
+---
+
+### 10. Shared Media Lists Across Tenants
+**Priority**: High
+**Category**: Multi-Tenant Collaboration
+**Estimate**: 3-4 days
+
+**Business Context**:
+When a PR firm onboards a new accessories client, they want to reuse an existing "Accessories Editors" media list that was built for a previous accessories client. Currently, media lists are siloed per client, requiring duplicate work.
+
+**Desired Features**:
+- [ ] Mark media lists as "Shared" vs "Private"
+- [ ] Shared media lists accessible across all tenants/clients
+- [ ] Permission controls (who can view/edit shared lists)
+- [ ] Automatically pull editors covering specific beats (e.g., "accessories")
+- [ ] Suggest relevant shared media lists when onboarding new clients
+- [ ] Version control for shared media lists
+- [ ] Track which clients are using which shared lists
+
+**Use Cases**:
+1. **Onboard new accessories client** → System suggests existing "Accessories Editors" list
+2. **Update shared list** → All clients using that list get updates
+3. **Add new editor to "Beauty" list** → Available to all beauty clients
+
+**Acceptance Criteria**:
+- [ ] Toggle "Share this list" when creating media lists
+- [ ] "Shared Media Lists" library page
+- [ ] Browse shared lists by category/beat
+- [ ] Copy shared list to client-specific list (with option to keep synced)
+- [ ] Permissions: Admin can create shared lists, users can view/copy
+- [ ] Track usage: "Used by 5 clients"
+- [ ] Automatic editor discovery for shared lists (e.g., auto-add new accessories editors)
+
+**Database Schema**:
+```sql
+CREATE TABLE media_lists (
+    id UUID PRIMARY KEY,
+    name VARCHAR(255),
+    description TEXT,
+    category VARCHAR(100), -- Accessories, Beauty, Fashion, etc.
+    is_shared BOOLEAN DEFAULT false,
+    created_by UUID,
+    organization_id UUID, -- Which org owns this list
+    auto_update BOOLEAN DEFAULT false, -- Auto-add new editors matching criteria
+    contacts UUID[] -- Array of contact IDs
+);
+
+CREATE TABLE media_list_usage (
+    id UUID PRIMARY KEY,
+    media_list_id UUID REFERENCES media_lists(id),
+    tenant_id UUID,
+    used_at TIMESTAMP
+);
+```
+
+---
+
+### 11. Automated Editor Discovery for Shared Lists
+**Priority**: High
+**Category**: AI & Automation
+**Estimate**: 3-4 days
+
+**Business Context**:
+When a shared media list exists for "Accessories", the system should automatically find and add new editors who write about accessories, keeping the list fresh without manual updates.
+
+**Desired Features**:
+- [ ] Define search criteria for media lists (e.g., "editors writing about accessories")
+- [ ] Automated daily/weekly scan for new editors matching criteria
+- [ ] Auto-add discovered editors to shared media lists
+- [ ] Review queue for suggested editors before auto-adding
+- [ ] Track discovery source (which article/publication led to discovery)
+- [ ] Confidence score for editor matching (how relevant they are)
+
+**Acceptance Criteria**:
+- [ ] "Auto-Update" toggle for media lists
+- [ ] Configure search criteria (keywords, publications, topics)
+- [ ] Daily background job to discover new editors
+- [ ] "Suggested Editors" review page (approve/reject)
+- [ ] Notification when new editors are added to lists
+- [ ] Show discovery date and source article
+
+**Example Workflow**:
+1. Create shared media list: "Accessories Editors"
+2. Enable auto-update with criteria: articles about "handbags, jewelry, accessories"
+3. System finds new article: "Top 10 Handbags for Fall" by Jane Smith at Vogue
+4. System adds Jane Smith to "Suggested Editors" queue
+5. Admin approves → Jane Smith added to "Accessories Editors" list
+6. All clients using that list now have Jane Smith
+
+---
+
+### 12. Lead Routing & Task Assignment
+**Priority**: Medium
+**Category**: Workflow & Collaboration
+**Estimate**: 3-4 days
+
+**Business Context**:
+PR firms mention "divide and conquer" and "lead routing" - they need to assign articles, brand mentions, and outreach tasks to specific team members.
+
+**Desired Features**:
+- [ ] Assign articles/reports to team members
+- [ ] Task assignment workflow (review article, pitch editor, follow up)
+- [ ] Lead routing rules (e.g., all beauty articles → Sarah)
+- [ ] Task status tracking (pending, in progress, completed)
+- [ ] Comments/notes on assigned tasks
+- [ ] Email notifications for new assignments
+- [ ] Task dashboard showing assigned vs. completed tasks
+
+**Acceptance Criteria**:
+- [ ] "Assign to" dropdown on each report/article
+- [ ] Task list page showing assigned tasks
+- [ ] Filter by assignee, status, date
+- [ ] Automated routing rules (if article matches X → assign to Y)
+- [ ] Task completion workflow
+- [ ] Activity feed showing task assignments and completions
+
+---
+
+## Summary of PR Firm Priorities
+
+### **Competitive Analysis: Tools We're Replacing**
+
+| Current Tool | Annual Cost | What It Does | Our Replacement Feature | Advantage |
+|-------------|-------------|--------------|------------------------|-----------|
+| **MuckRack** | $7k-12k/seat | Media contact database | Automated Editor Discovery (#5) | Auto-updating, find editors first, better context |
+| **TVEyes** | $500-1k/month | TV broadcast monitoring | Broadcast Monitoring (#3) | Unified platform, better AI, real-time alerts |
+| **Tribe Dynamics** | $2k-5k/month | Social media tracking | Social Media Monitoring (#2) | Integrated analytics, lower cost |
+| **PressReader** | $300-500/month | Print media search | Print Monitoring (#4) | Optional add-on |
+
+**Total savings for PR firms: $20k-40k/year by replacing these tools with Marketing Hunting**
+
+---
+
+### **Phase 1: Core Competitive Features** (Weeks 1-8)
+**Goal**: Replace MuckRack, Tribe Dynamics, and TVEyes with superior alternatives
+
+#### Week 1-2: MuckRack Replacement Foundation
+1. **Media Contact Database & Editor Tracking** (#5) - **CRITICAL**
+   - Auto-discover editors from articles we're already monitoring
+   - Build editor profiles with writing history and contact info
+   - First-mover advantage: find editors before they're in MuckRack
+
+#### Week 3-4: Tribe Dynamics Replacement
+2. **Social Media Tracking & Influencer Monitoring** (#2) - **CRITICAL**
+   - Instagram, TikTok, YouTube brand mention tracking
+   - Influencer identification and engagement metrics
+   - Earned Media Value (EMV) calculation
+   - Integrated with article monitoring (unified view)
+
+#### Week 5-6: Quick Wins & Workflow
+3. **AI-Powered Search & Multi-LLM Comparison** (#6) - **HIGH VALUE**
+   - Natural language search across all content
+   - Compare ChatGPT, Gemini, Claude recommendations
+   - Editor vs. expert recommendation tagging
+
+4. **Export to Google Sheets/Docs** (#8) - **EASY WIN**
+   - Client reporting automation
+   - 1-day implementation, high satisfaction
+
+#### Week 7-8: Strategic Features
+5. **Shared Media Lists Across Tenants** (#10) - **EFFICIENCY**
+   - Reuse editor lists across clients
+   - Auto-populate lists with discovered editors
+   - Huge time-saver for onboarding
+
+6. **Automated Editor Discovery for Lists** (#11) - **AUTOMATION**
+   - Keep media lists fresh automatically
+   - Daily scan for new editors matching criteria
+
+---
+
+### **Phase 2: Advanced Media Monitoring** (Weeks 9-16)
+**Goal**: Complete the TVEyes replacement and add differentiating features
+
+#### Week 9-12: TVEyes Replacement
+7. **Broadcast TV & News Segment Monitoring** (#3) - **CRITICAL**
+   - Closed caption scraping and indexing
+   - Video clip extraction for brand mentions
+   - Morning show, late night, local news coverage
+   - Real-time alerts for TV mentions
+
+#### Week 13-14: Podcast Intelligence
+8. **Podcast Monitoring & Media Lists** (#9) - **GROWING CHANNEL**
+   - Podcast discovery and tracking
+   - Episode transcription and brand mention detection
+   - Host contact database
+   - Pitch tracking for podcast appearances
+
+#### Week 15-16: Workflow & Collaboration
+9. **Lead Routing & Task Assignment** (#12) - **WORKFLOW**
+   - Assign articles and outreach tasks to team members
+   - Automated routing rules
+   - Task tracking and completion
+
+---
+
+### **Phase 3: Premium Features & Scale** (Months 3-6)
+**Goal**: Advanced features that create market differentiation
+
+10. **Event Coverage Tracking** (#1)
+    - Social media monitoring for events
+    - ROI measurement for event activations
+    - Influencer attendance and post tracking
+
+11. **Print Media Monitoring** (#4)
+    - PressReader integration or alternative
+    - Magazine placement tracking
+    - Print circulation and reach metrics
+
+12. **Social Media Credential Management** (#7)
+    - Secure credential storage
+    - Auto-collect notifications
+    - Influencer gifting ROI automation
+
+---
+
+### **Success Metrics**
+
+**To Replace MuckRack**:
+- [ ] Auto-discover 80%+ of editors from monitored articles
+- [ ] Find new editors 30+ days before they appear in MuckRack
+- [ ] Contact info accuracy >85%
+- [ ] Editor profile completeness >90%
+
+**To Replace Tribe Dynamics**:
+- [ ] Track 95%+ of public Instagram/TikTok brand mentions
+- [ ] Calculate EMV within 10% accuracy of Tribe Dynamics
+- [ ] Real-time alerts (<5 min delay)
+
+**To Replace TVEyes**:
+- [ ] Monitor top 20 news networks 24/7
+- [ ] Closed caption indexing <1 min delay
+- [ ] Brand mention accuracy >90%
+
+**Business Success**:
+- [ ] PR firms can cancel MuckRack, Tribe, TVEyes subscriptions
+- [ ] 50%+ cost savings vs. buying all three tools separately
+- [ ] Single unified platform = better workflow = higher productivity
+
+---
+
+*Last Updated: 2025-11-19*

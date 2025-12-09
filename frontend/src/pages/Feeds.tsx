@@ -31,6 +31,9 @@ import {
   RssFeed as RssIcon,
   Search as SearchIcon,
   TagOutlined as HashtagIcon,
+  Instagram as InstagramIcon,
+  VideoLibrary as TikTokIcon,
+  YouTube as YouTubeIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { feedsApi, type Feed } from '../api/feeds';
@@ -173,6 +176,12 @@ const Feeds: React.FC = () => {
         return <RssIcon />;
       case 'google_search':
         return <SearchIcon />;
+      case 'instagram':
+        return <InstagramIcon />;
+      case 'tiktok':
+        return <TikTokIcon />;
+      case 'youtube':
+        return <YouTubeIcon />;
       default:
         return <HashtagIcon />;
     }
@@ -199,8 +208,13 @@ const Feeds: React.FC = () => {
       case 'Instagram':
         return [
           { value: 'hashtag', label: 'Hashtag' },
-          { value: 'keyword', label: 'Keyword' },
           { value: 'user', label: 'User/Account' },
+        ];
+      case 'YouTube':
+        return [
+          { value: 'search', label: 'Keyword Search' },
+          { value: 'channel', label: 'Channel' },
+          { value: 'video', label: 'Specific Video' },
         ];
       default:
         return [{ value: 'rss_url', label: 'RSS URL' }];
@@ -483,8 +497,9 @@ const Feeds: React.FC = () => {
               >
                 <option value="RSS">RSS</option>
                 <option value="GOOGLE_SEARCH">Google Search</option>
-                <option value="TikTok">TikTok</option>
                 <option value="Instagram">Instagram</option>
+                <option value="TikTok">TikTok</option>
+                <option value="YouTube">YouTube</option>
               </TextField>
               <TextField
                 fullWidth

@@ -24,6 +24,7 @@ class Report(Base):
     timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
     source = Column(String(500))  # e.g., "RSS", "TikTok (@username)"
     provider = Column(String(50), nullable=False, index=True)  # RSS, TikTok, Instagram
+    source_type = Column(String(20), index=True)  # digital, social, broadcast
 
     # Content
     brands = Column(ARRAY(Text), default=list)
@@ -71,6 +72,7 @@ class Report(Base):
             'timestamp': self.timestamp.isoformat() if self.timestamp else None,
             'source': self.source,
             'provider': self.provider,
+            'source_type': self.source_type,
             'brands': self.brands or [],
             'title': self.title,
             'link': self.link,
