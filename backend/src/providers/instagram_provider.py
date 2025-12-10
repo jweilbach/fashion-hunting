@@ -22,71 +22,90 @@ class InstagramProvider(ContentProvider):
     - Hashtag scraping
     """
 
-    def __init__(
-        self,
-        search_type: str,  # 'mentions', 'profile', 'hashtag'
-        search_value: str,  # brand name, username, or hashtag
-        max_posts: int = 50
-    ):
+    def __init__(self, search_configs: List[Dict]):
         """
         Initialize Instagram provider.
 
         Args:
-            search_type: Type of search ('mentions', 'profile', 'hashtag')
-            search_value: Value to search for
-            max_posts: Maximum number of posts to fetch
+            search_configs: List of search config dicts with keys:
+                - type: 'mentions', 'profile', 'hashtag', or 'user'
+                - value: brand name, username, or hashtag
+                - count (optional): number of posts to fetch (default 50)
+
+        Example:
+            >>> configs = [
+            ...     {'type': 'hashtag', 'value': 'fashion', 'count': 30},
+            ...     {'type': 'user', 'value': 'fashionista', 'count': 20}
+            ... ]
+            >>> provider = InstagramProvider(configs)
         """
-        self.search_type = search_type
-        self.search_value = search_value
-        self.max_posts = max_posts
+        self.search_configs = search_configs
 
         logger.info(
-            f"InstagramProvider initialized - type: {search_type}, "
-            f"value: {search_value}, max: {max_posts}"
+            f"InstagramProvider initialized with {len(search_configs)} searches"
         )
 
     def fetch_items(self) -> List[Dict]:
         """
-        Fetch Instagram posts based on configured search type.
+        Fetch Instagram posts based on configured searches.
 
         Returns:
             List of standardized item dicts matching ContentProvider format
         """
-        try:
-            # Initialize Apify scraper
-            scraper = ApifyScraperService()
+        all_posts: List[Dict] = []
 
-            # Fetch posts based on search type
-            if self.search_type == 'mentions':
-                logger.info(f"Searching Instagram for brand mentions: {self.search_value}")
-                posts = scraper.scrape_instagram_mentions(
-                    brand_name=self.search_value,
-                    max_posts=self.max_posts
-                )
+        for config in self.search_configs:
+            search_type = config.get('type', 'hashtag')
+            value = config.get('value', '')
+            count = int(config.get('count', 50))
 
-            elif self.search_type == 'profile':
-                logger.info(f"Scraping Instagram profile: @{self.search_value}")
-                posts = scraper.scrape_instagram_profile(
-                    username=self.search_value,
-                    max_posts=self.max_posts
-                )
+            if not value:
+                logger.warning(f"Skipping empty search config: {config}")
+                continue
 
-            elif self.search_type == 'hashtag':
-                logger.info(f"Scraping Instagram hashtag: #{self.search_value}")
-                posts = scraper.scrape_instagram_hashtag(
-                    hashtag=self.search_value,
-                    max_posts=self.max_posts
-                )
+            try:
+                # Initialize Apify scraper
+                scraper = ApifyScraperService()
 
-            else:
-                raise ValueError(f"Invalid search_type: {self.search_type}")
+                # Map 'user' to 'profile' for backwards compatibility
+                if search_type == 'user':
+                    search_type = 'profile'
 
-            logger.info(f"✅ Fetched {len(posts)} Instagram posts")
-            return posts
+                # Fetch posts based on search type
+                if search_type == 'mentions':
+                    logger.info(f"Searching Instagram for brand mentions: {value}")
+                    posts = scraper.scrape_instagram_mentions(
+                        brand_name=value,
+                        max_posts=count
+                    )
 
-        except Exception as e:
-            logger.error(f"Error fetching Instagram content: {e}", exc_info=True)
-            return []
+                elif search_type == 'profile':
+                    logger.info(f"Scraping Instagram profile: @{value}")
+                    posts = scraper.scrape_instagram_profile(
+                        username=value,
+                        max_posts=count
+                    )
+
+                elif search_type == 'hashtag':
+                    logger.info(f"Scraping Instagram hashtag: #{value}")
+                    posts = scraper.scrape_instagram_hashtag(
+                        hashtag=value,
+                        max_posts=count
+                    )
+
+                else:
+                    logger.warning(f"Unknown search type: {search_type}")
+                    continue
+
+                logger.info(f"Fetched {len(posts)} posts for {search_type}: {value}")
+                all_posts.extend(posts)
+
+            except Exception as e:
+                logger.error(f"Error fetching Instagram {search_type} '{value}': {e}", exc_info=True)
+                continue
+
+        logger.info(f"InstagramProvider: Fetched {len(all_posts)} total posts")
+        return all_posts
 
     def get_provider_name(self) -> str:
         """Return the name of this provider"""
