@@ -1,23 +1,26 @@
 """
-TikTok Processor - lightweight processor for TikTok videos
-Skips AI processing and focuses on engagement metrics and influencer tracking
+TikTok Processor - processor for TikTok videos with AI brand extraction
+Combines hashtag matching with AI-powered brand detection from captions
 """
 import logging
 from typing import Dict, List, Tuple
 
 from services.base_processor import BaseContentProcessor
+from utils.brand_matcher import BrandMatcher
+from ai_client import AIClient
 
 logger = logging.getLogger(__name__)
 
 
 class TikTokProcessor(BaseContentProcessor):
     """
-    Lightweight processor for TikTok videos
+    Processor for TikTok videos with AI brand extraction
 
     Focuses on:
+    - AI brand extraction from captions (finds ALL brands)
+    - Hashtag/mention brand matching (for tracked brands)
     - Engagement metrics (likes, comments, shares, views)
     - Influencer identification
-    - Hashtag/mention extraction
     - EMV calculation
     - Viral potential scoring
 
@@ -27,16 +30,20 @@ class TikTokProcessor(BaseContentProcessor):
     - Topic classification (already filtered by hashtag/keyword)
     """
 
-    def __init__(self, brands: List[str] = None, config: Dict = None):
+    def __init__(self, ai_client: AIClient, brands: List[str] = None, config: Dict = None):
         """
         Initialize TikTok processor
 
         Args:
+            ai_client: AIClient instance for brand extraction from captions
             brands: List of brand names to track (used for hashtag matching)
-            config: Configuration options (unused for TikTok)
+            config: Configuration options:
+                - enable_ai_brand_extraction: bool (default True) - Use AI to extract ALL brands from captions
         """
-        # Don't pass ai_client to parent - we don't need it
-        super().__init__(ai_client=None, brands=brands, config=config)
+        super().__init__(ai_client=ai_client, brands=brands, config=config)
+
+        # Configuration option to enable/disable AI brand extraction
+        self.enable_ai_brand_extraction = config.get('enable_ai_brand_extraction', True) if config else True
 
     def process_item(self, item: Dict) -> Tuple[Dict, str]:
         """
@@ -77,10 +84,38 @@ class TikTokProcessor(BaseContentProcessor):
         comments = stats.get('comments', 0)
         shares = stats.get('shares', 0)
 
-        # Brand detection via hashtags (NO AI)
-        brands_mentioned = self._extract_brands_from_hashtags(hashtags)
+        # Step 1: Extract brands from hashtags (for tracked brands)
+        brands_from_hashtags = self._extract_brands_from_hashtags(hashtags)
+        logger.info(f"Brands from hashtags: {brands_from_hashtags}")
 
-        logger.info(f"Detected brands from hashtags: {brands_mentioned}")
+        # Step 2: Extract ALL brands from caption text using AI (if enabled)
+        brands_from_ai = []
+        if self.enable_ai_brand_extraction:
+            caption_text = title + '\n' + raw_summary if raw_summary else title
+
+            if self.ai_client and len(caption_text.strip()) > 20:
+                logger.info(f"Extracting brands from caption using AI ({len(caption_text)} chars)")
+                try:
+                    # Use TikTok-specific brand extraction (optimized for short captions)
+                    ai_analysis = self.ai_client.extract_brands_from_tiktok(caption_text)
+                    brands_from_ai = ai_analysis.get('brands', [])
+                    logger.info(f"AI extracted brands: {brands_from_ai}")
+                except Exception as ai_error:
+                    logger.warning(f"AI brand extraction failed: {ai_error}")
+                    brands_from_ai = []
+        else:
+            logger.info("AI brand extraction disabled by config")
+
+        # Step 3: Combine and deduplicate brands
+        all_brands = brands_from_hashtags.copy()
+        seen = set(b.lower() for b in all_brands)
+        for brand in brands_from_ai:
+            if brand.lower() not in seen:
+                all_brands.append(brand)
+                seen.add(brand.lower())
+
+        logger.info(f"Combined brands (hashtags + AI): {all_brands}")
+        brands_mentioned = all_brands
 
         # Calculate engagement metrics
         total_engagement = likes + comments + shares
@@ -139,7 +174,7 @@ class TikTokProcessor(BaseContentProcessor):
 
     def _extract_brands_from_hashtags(self, hashtags: List[str]) -> List[str]:
         """
-        Extract brand names from hashtags (NO AI)
+        Extract brand names from hashtags using BrandMatcher utility.
 
         Args:
             hashtags: List of hashtags from the video
@@ -150,25 +185,8 @@ class TikTokProcessor(BaseContentProcessor):
         if not self.brands:
             return []
 
-        brands_found = []
-
-        # Check hashtags (with or without # prefix)
-        for hashtag in hashtags:
-            hashtag_clean = hashtag.lstrip('#').lower().replace(' ', '')
-            for brand in self.brands:
-                brand_lower = brand.lower().replace(' ', '')
-
-                # Only match if brand name appears at the START of hashtag
-                # This prevents false positives like "haircolor" matching "color"
-                # Examples:
-                #   - "#colorwow" or "#colorwowhair" → matches "color wow" ✅
-                #   - "#haircolor" → does NOT match "color wow" ❌
-                #   - "#versace" or "#versacestyle" → matches "versace" ✅
-                if hashtag_clean.startswith(brand_lower):
-                    if brand not in brands_found:
-                        brands_found.append(brand)
-
-        return brands_found
+        matcher = BrandMatcher(self.brands)
+        return matcher.match_in_hashtags(hashtags)
 
     def _calculate_engagement_rate(self, likes: int, comments: int, shares: int, plays: int) -> float:
         """

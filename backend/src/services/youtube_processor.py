@@ -1,23 +1,26 @@
 """
-YouTube Processor - lightweight processor for YouTube videos
-Skips AI processing and focuses on engagement metrics and content creator tracking
+YouTube Processor - processor for YouTube videos with AI brand extraction
+Combines text matching with AI-powered brand detection from descriptions
 """
 import logging
 from typing import Dict, List, Tuple
 
 from services.base_processor import BaseContentProcessor
+from utils.brand_matcher import BrandMatcher
+from ai_client import AIClient
 
 logger = logging.getLogger(__name__)
 
 
 class YouTubeProcessor(BaseContentProcessor):
     """
-    Lightweight processor for YouTube videos
+    Processor for YouTube videos with AI brand extraction
 
     Focuses on:
+    - AI brand extraction from descriptions (finds ALL brands)
+    - Text-based brand matching in titles/descriptions (for tracked brands)
     - Engagement metrics (views, likes, comments)
     - Creator/channel identification
-    - Brand mention detection in titles/descriptions
     - EMV calculation
     - Engagement quality scoring
 
@@ -27,16 +30,20 @@ class YouTubeProcessor(BaseContentProcessor):
     - Topic classification (already filtered by search keyword)
     """
 
-    def __init__(self, brands: List[str] = None, config: Dict = None):
+    def __init__(self, ai_client: AIClient, brands: List[str] = None, config: Dict = None):
         """
         Initialize YouTube processor
 
         Args:
+            ai_client: AIClient instance for brand extraction from descriptions
             brands: List of brand names to track
-            config: Configuration options (unused for YouTube)
+            config: Configuration options:
+                - enable_ai_brand_extraction: bool (default True) - Use AI to extract ALL brands from descriptions
         """
-        # Don't pass ai_client to parent - we don't need it
-        super().__init__(ai_client=None, brands=brands, config=config)
+        super().__init__(ai_client=ai_client, brands=brands, config=config)
+
+        # Configuration option to enable/disable AI brand extraction
+        self.enable_ai_brand_extraction = config.get('enable_ai_brand_extraction', True) if config else True
 
     def process_item(self, item: Dict) -> Tuple[Dict, str]:
         """
@@ -72,16 +79,47 @@ class YouTubeProcessor(BaseContentProcessor):
         est_reach = item.get('est_reach', 0)
 
         logger.info(f"Processing YouTube video from {channel_name}")
+        logger.info(f"Title: {title[:100]}...")
+        logger.info(f"Description length: {len(description)} chars")
+        logger.info(f"Description preview: {description[:200]}...")
 
         # Extract engagement metrics
         views = stats.get('views', 0)
         likes = stats.get('likes', 0)
         comments = stats.get('comments', 0)
 
-        # Brand detection in title and description (NO AI - simple keyword matching)
-        brands_mentioned = self._extract_brands_from_text(title, description)
+        # Step 1: Extract brands from title/description text (for tracked brands)
+        brands_from_text = self._extract_brands_from_text(title, description)
+        logger.info(f"Brands from text matching: {brands_from_text}")
 
-        logger.info(f"Detected brands in title/description: {brands_mentioned}")
+        # Step 2: Extract ALL brands from title + description using AI (if enabled)
+        brands_from_ai = []
+        if self.enable_ai_brand_extraction:
+            full_text = f"{title}\n\n{description}" if description else title
+
+            if self.ai_client and len(full_text.strip()) > 20:
+                logger.info(f"Extracting brands from title/description using AI ({len(full_text)} chars)")
+                try:
+                    # Use YouTube-specific brand extraction (optimized for product lists and affiliate links)
+                    ai_analysis = self.ai_client.extract_brands_from_youtube(full_text)
+                    brands_from_ai = ai_analysis.get('brands', [])
+                    logger.info(f"AI extracted brands: {brands_from_ai}")
+                except Exception as ai_error:
+                    logger.warning(f"AI brand extraction failed: {ai_error}")
+                    brands_from_ai = []
+        else:
+            logger.info("AI brand extraction disabled by config")
+
+        # Step 3: Combine and deduplicate brands
+        all_brands = brands_from_text.copy()
+        seen = set(b.lower() for b in all_brands)
+        for brand in brands_from_ai:
+            if brand.lower() not in seen:
+                all_brands.append(brand)
+                seen.add(brand.lower())
+
+        logger.info(f"Combined brands (text + AI): {all_brands}")
+        brands_mentioned = all_brands
 
         # Calculate engagement metrics
         total_engagement = likes + comments
@@ -140,7 +178,7 @@ class YouTubeProcessor(BaseContentProcessor):
 
     def _extract_brands_from_text(self, title: str, description: str) -> List[str]:
         """
-        Extract brand names from title and description (NO AI - simple keyword matching)
+        Extract brand names from title and description using BrandMatcher utility.
 
         Args:
             title: Video title
@@ -152,24 +190,8 @@ class YouTubeProcessor(BaseContentProcessor):
         if not self.brands:
             return []
 
-        import re
-        brands_found = []
-        combined_text = f"{title} {description}".lower()
-
-        for brand in self.brands:
-            brand_lower = brand.lower()
-            # Use word boundary matching to avoid false positives
-            # This prevents "color" from matching "haircolor" or "colorful"
-            # Examples:
-            #   - "Color Wow" → matches "color wow", "Color Wow hair", etc. ✅
-            #   - "Color Wow" → does NOT match "haircolor" ❌
-            #   - "Versace" → matches "Versace", "Versace style", etc. ✅
-            pattern = r'\b' + re.escape(brand_lower) + r'\b'
-            if re.search(pattern, combined_text):
-                if brand not in brands_found:
-                    brands_found.append(brand)
-
-        return brands_found
+        matcher = BrandMatcher(self.brands)
+        return matcher.match_in_text(title, description)
 
     def _calculate_engagement_rate(self, likes: int, comments: int, views: int) -> float:
         """

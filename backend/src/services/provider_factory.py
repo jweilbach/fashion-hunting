@@ -13,7 +13,7 @@ from providers.rss_provider import RSSProvider
 from providers.google_search_provider import GoogleSearchProvider
 from providers.instagram_provider import InstagramProvider
 from providers.tiktok_provider import TikTokProvider
-from providers.youtube_provider import YouTubeProvider
+from providers.youtube_api_provider import YouTubeAPIProvider  # Using official YouTube Data API v3
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class ProviderFactory:
         ProviderType.GOOGLE_SEARCH: GoogleSearchProvider,
         ProviderType.INSTAGRAM: InstagramProvider,
         ProviderType.TIKTOK: TikTokProvider,
-        ProviderType.YOUTUBE: YouTubeProvider,
+        ProviderType.YOUTUBE: YouTubeAPIProvider,  # Using YouTube Data API v3 for full descriptions
     }
 
     @classmethod

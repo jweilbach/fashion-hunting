@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # ---- Prompt size control (same values as original)
 MAX_TEXT_CHARS = 20000
-MAX_TOKENS = 400
+MAX_TOKENS = 1000  # Increased from 400 to allow more brands in response
 
 DEFAULT_BRANDS = ["Coors Light", "Doritos"]
 
@@ -122,6 +122,188 @@ class AIClient:
     @retry(wait=wait_exponential(multiplier=1, min=2, max=60),
            stop=stop_after_attempt(7),
            retry=retry_if_exception_type((Timeout, RequestException, HTTPError)))
+    def extract_brands_from_youtube(self, fulltext: str):
+        """Extract brands from YouTube video descriptions - optimized for product lists and affiliate links."""
+        example_text = "Products Used:\n• Maelove Full Follicle Shampoo\n• Garnier Fructis Sleek & Shine\n• Dove Hyaluronic Moisture Hair Mask\nhttps://amzlink.to/irestore"
+        example_json = {
+            "sentiment": "positive",
+            "topic": "product",
+            "brands": ["Maelove", "Garnier Fructis", "Dove", "iRESTORE"],
+            "short_summary": "Hair care product recommendations",
+            "est_reach": 10000
+        }
+
+        prompt = f"""
+Extract brand information from this YouTube video description.
+
+YOUTUBE-SPECIFIC BRAND EXTRACTION:
+- Extract brands from product lists (look for: "Products Used:", "SHOP:", "Links:", bullet points, numbered lists)
+- Extract brands from affiliate link text (e.g., "amzlink.to/irestore" → "iRESTORE")
+- Extract brands mentioned in title or description text
+- Extract brand name only (e.g., "Maelove" not "Maelove Full Follicle Shampoo")
+- YouTube descriptions often list many products - extract ALL of them
+- Use proper capitalization as shown in text
+- DO NOT include: creator names, channel names, generic words like "Amazon" or "Shop"
+
+Extract:
+- sentiment: one of ["positive","neutral","negative"]
+- topic: one of ["product","influencer","lifestyle","trend","corporate"]
+- brands: JSON array of ALL brand names found
+- short_summary: <= 3 sentences describing the video content
+- est_reach: integer estimate based on views
+
+Return ONLY valid JSON with keys: sentiment, topic, brands, short_summary, est_reach.
+
+Example:
+Text: "{example_text}"
+JSON: {json.dumps(example_json, ensure_ascii=False)}
+
+Text to analyze:
+{fulltext}
+""".strip()
+
+        return self._call_llm_for_brands(prompt, fulltext, "YouTube")
+
+    def extract_brands_from_tiktok(self, fulltext: str):
+        """Extract brands from TikTok captions - optimized for short captions with product mentions."""
+        example_text = "Hair Care Day!!💆‍♀️🧴\nProducts:\nAlivelab Scalp water shampoo\nMedicube Soy protein treatment\nChanel Eau Tendere hair"
+        example_json = {
+            "sentiment": "positive",
+            "topic": "product",
+            "brands": ["Alivelab", "Medicube", "Chanel"],
+            "short_summary": "Hair care routine video",
+            "est_reach": 50000
+        }
+
+        prompt = f"""
+Extract brand information from this TikTok video caption.
+
+TIKTOK-SPECIFIC BRAND EXTRACTION:
+- TikTok captions are short - extract ALL brand names mentioned
+- Look for product lists (often after "Products:", emojis, or line breaks)
+- Extract brands from casual mentions (e.g., "loving my new Nike shoes")
+- Extract brand name only (e.g., "Alivelab" not "Alivelab Scalp water shampoo")
+- Use proper capitalization as shown in text
+- DO NOT include: creator usernames, generic words, emojis
+
+Extract:
+- sentiment: one of ["positive","neutral","negative"]
+- topic: one of ["product","influencer","lifestyle","trend","corporate"]
+- brands: JSON array of ALL brand names found
+- short_summary: <= 2 sentences describing the video
+- est_reach: integer estimate based on plays/engagement
+
+Return ONLY valid JSON with keys: sentiment, topic, brands, short_summary, est_reach.
+
+Example:
+Text: "{example_text}"
+JSON: {json.dumps(example_json, ensure_ascii=False)}
+
+Text to analyze:
+{fulltext}
+""".strip()
+
+        return self._call_llm_for_brands(prompt, fulltext, "TikTok")
+
+    def extract_brands_from_instagram(self, fulltext: str):
+        """Extract brands from Instagram captions - optimized for captions with product mentions."""
+        example_text = "Obsessed with my new @glossier makeup! Also using @theordinary serums and @cerave moisturizer. #skincare #beauty"
+        example_json = {
+            "sentiment": "positive",
+            "topic": "product",
+            "brands": ["Glossier", "The Ordinary", "CeraVe"],
+            "short_summary": "Skincare and makeup routine",
+            "est_reach": 25000
+        }
+
+        prompt = f"""
+Extract brand information from this Instagram post caption.
+
+INSTAGRAM-SPECIFIC BRAND EXTRACTION:
+- Extract brands from @mentions (e.g., "@glossier" → "Glossier")
+- Extract brands from caption text
+- Extract brands from product tags/mentions
+- Extract brand name only, properly formatted (e.g., "The Ordinary" not "theordinary")
+- Instagram captions often mention multiple brands - extract ALL of them
+- DO NOT include: influencer usernames, location tags, generic words
+
+Extract:
+- sentiment: one of ["positive","neutral","negative"]
+- topic: one of ["product","influencer","lifestyle","trend","corporate"]
+- brands: JSON array of ALL brand names found
+- short_summary: <= 2 sentences describing the post
+- est_reach: integer estimate based on likes/engagement
+
+Return ONLY valid JSON with keys: sentiment, topic, brands, short_summary, est_reach.
+
+Example:
+Text: "{example_text}"
+JSON: {json.dumps(example_json, ensure_ascii=False)}
+
+Text to analyze:
+{fulltext}
+""".strip()
+
+        return self._call_llm_for_brands(prompt, fulltext, "Instagram")
+
+    def _call_llm_for_brands(self, prompt: str, fulltext: str, platform: str):
+        """Shared LLM call logic for all social media platforms."""
+        logger.info("=" * 80)
+        logger.info("PLATFORM: %s", platform)
+        logger.info("FULLTEXT LENGTH: %d", len(fulltext))
+        logger.info("FULLTEXT CONTENT:")
+        logger.info("-" * 80)
+        logger.info("%s", fulltext[:1000])  # Log first 1000 chars
+        if len(fulltext) > 1000:
+            logger.info("... (truncated, total %d chars)", len(fulltext))
+        logger.info("-" * 80)
+
+        r = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type":"application/json"},
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [{"role":"user","content":prompt}],
+                "temperature": 0.1,  # Lower temperature for more consistent extraction
+                "response_format": {"type": "json_object"},
+                "max_tokens": MAX_TOKENS
+            },
+            timeout=120
+        )
+
+        if r.status_code == 429:
+            retry_after = r.headers.get("retry-after") or r.headers.get("Retry-After")
+            try:
+                delay = max(2, int(float(retry_after))) if retry_after else 8
+            except Exception:
+                delay = 8
+            delay += random.uniform(0, 1.0)
+            logger.warning("Rate limited (429). Retry-After=%s -> sleeping %.2fs.", retry_after, delay)
+            time.sleep(min(delay, 90))
+            r.raise_for_status()
+
+        r.raise_for_status()
+
+        content = r.json()["choices"][0]["message"]["content"]
+        logger.info("LLM RAW RESPONSE:")
+        logger.info("-" * 80)
+        logger.info("%s", content)
+        logger.info("-" * 80)
+
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            clean = self._extract_json_fenced(content)
+            data = json.loads(clean)
+
+        brands_llm = self._extract_brands_from_payload(data)
+        logger.info("LLM EXTRACTED BRANDS: %s", brands_llm)
+        logger.info("=" * 80)
+
+        # No rule-based extraction for social media - rely purely on AI
+        data["brands"] = brands_llm
+        return data
+
     def classify_summarize(self, fulltext: str, known_brands: List[str]):
         example_text = "This year, Coors Light and Doritos leaned into early Super Bowl strategies."
         example_json = {

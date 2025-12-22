@@ -21,17 +21,17 @@ class ProcessorFactory:
     Factory for creating content processors based on provider type.
 
     Maps providers to the appropriate processor:
-    - RSS, GOOGLE_SEARCH → ArticleProcessor (web articles)
-    - TIKTOK, INSTAGRAM, YOUTUBE → Specialized processors (social media, no AI)
+    - RSS, GOOGLE_SEARCH → ArticleProcessor (web articles with AI)
+    - TIKTOK, INSTAGRAM, YOUTUBE → Specialized processors (social media with AI brand extraction)
     """
 
     # Mapping of providers to processor classes
     _PROCESSOR_MAP = {
         ProviderType.RSS: ArticleProcessor,
         ProviderType.GOOGLE_SEARCH: ArticleProcessor,  # Google Search returns web articles
-        ProviderType.TIKTOK: TikTokProcessor,  # Lightweight processor for TikTok videos, no AI
-        ProviderType.INSTAGRAM: InstagramProcessor,  # Lightweight processor, no AI
-        ProviderType.YOUTUBE: YouTubeProcessor,  # Lightweight processor for YouTube videos, no AI
+        ProviderType.TIKTOK: TikTokProcessor,  # TikTok processor with AI brand extraction
+        ProviderType.INSTAGRAM: InstagramProcessor,  # Instagram processor with AI brand extraction
+        ProviderType.YOUTUBE: YouTubeProcessor,  # YouTube processor with AI brand extraction
     }
 
     @classmethod
@@ -71,14 +71,7 @@ class ProcessorFactory:
 
         logger.info(f"Creating {processor_class.__name__} for provider: {provider}")
 
-        # Instagram, TikTok, and YouTube processors don't need AI client
-        if processor_class in (InstagramProcessor, TikTokProcessor, YouTubeProcessor):
-            return processor_class(
-                brands=brands,
-                config=config or {}
-            )
-
-        # Other processors need AI client
+        # All processors now use AI client for brand extraction
         return processor_class(
             ai_client=ai_client,
             brands=brands,
