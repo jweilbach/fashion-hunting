@@ -40,9 +40,10 @@ class YouTubeProvider(ContentProvider):
             raise ValueError("APIFY_API_TOKEN environment variable is required")
 
         self.client = ApifyClient(api_token)
-        # Using the correct Apify actor for YouTube scraping
-        # Alternative actors: "streamers/youtube-scraper" or "bernardo/youtube-scraper"
-        self.actor_id = "streamers/youtube-scraper"
+        # Using bernardo/youtube-scraper - this actor has better description support
+        # Note: streamers/youtube-scraper truncates descriptions
+        # We could also try: "bernardo/youtube-scraper", "curious_coder/youtube-scraper"
+        self.actor_id = "bernardo/youtube-scraper"
 
         logging.info(
             "YouTubeProvider initialized with %d searches using Apify",
@@ -106,11 +107,16 @@ class YouTubeProvider(ContentProvider):
 
     def _normalize_video_data(self, video: Dict[str, Any]) -> Dict[str, Any]:
         """Normalize YouTube video data from Apify to standard format"""
+        # Log all available fields to debug description issue
+        logger.info(f"Raw video data keys: {list(video.keys())}")
+
         video_id = video.get('id', '')
         title = video.get('title', '')
-        description = video.get('description', '')
+        description = video.get('description', '') or video.get('text', '')  # Try 'text' field too
         channel_name = video.get('channelName', 'Unknown')
         channel_id = video.get('channelId', '')
+
+        logger.info(f"Video: {title[:50]}... | Description length: {len(description)}")
 
         # URL
         video_url = video.get('url') or f"https://www.youtube.com/watch?v={video_id}"
