@@ -1179,6 +1179,114 @@ CREATE TABLE email_drafts (
 
 ---
 
+### 9. Instagram & TikTok Rate Limiting (429 Errors)
+**Status**: Open
+**Priority**: Medium
+**Date Identified**: 2026-01-07
+
+**Description**:
+Instagram and TikTok actively block web scraping attempts with 429 "Too Many Requests" errors. This is normal anti-scraping behavior from social media platforms protecting their APIs and data.
+
+**Symptoms**:
+```
+[apify.instagram-scraper] -> backing off {"statusCode":429,"waitBeforeRetryMS":1001}
+[apify.instagram-scraper] -> backing off {"statusCode":429,"waitBeforeRetryMS":2075}
+[apify.instagram-scraper] -> backing off {"statusCode":429,"waitBeforeRetryMS":4142}
+[apify.instagram-scraper] -> NO RESULTS: is private or has no posts matching the query
+```
+
+**Impact**:
+- Instagram searches may return 0 results even for valid hashtags
+- TikTok searches may fail after multiple requests
+- Rate limits are IP-based and affect all searches from same server
+- Users can see content in mobile apps but scraping fails
+- Affects both Quick Search and scheduled jobs
+
+**Root Cause**:
+1. Instagram/TikTok detect automated scraping and return 429 errors
+2. Apify correctly backs off with exponential delays (1s, 2s, 4s...)
+3. After multiple retries, scraper gives up and returns 0 results
+4. Official mobile apps use authenticated APIs with higher rate limits
+5. Web scraping hits public endpoints with strict limits
+
+**Why It Happens**:
+- **Not an Apify issue** - Apify is working correctly
+- **Not a bug** - This is expected anti-scraping behavior
+- **Platform limitation** - Instagram/TikTok actively block scrapers
+- **Temporary** - Rate limits reset after time (minutes to hours)
+
+**Workarounds**:
+
+1. **Space out requests** (Free)
+   - Wait 5-10 minutes between Instagram/TikTok searches
+   - Use Quick Search sparingly for testing
+   - Schedule jobs with longer intervals (hourly vs every 15 min)
+
+2. **Use different search terms** (Free)
+   - Avoid searching same hashtag repeatedly
+   - Vary search patterns to distribute load
+
+3. **Residential proxies** (Paid - Apify feature)
+   - Rotate IP addresses to avoid rate limits
+   - Costs extra money on Apify platform
+   - More reliable for production use
+
+4. **Official APIs** (Limited data)
+   - Instagram Graph API requires business accounts
+   - TikTok API has strict approval process
+   - Much more limited data than scraping
+
+**Alternative Providers**:
+- **YouTube** - Uses official YouTube Data API v3, no rate limit issues
+- **Google Search** - More generous rate limits
+- **RSS Feeds** - No rate limiting
+
+**Recommendation**:
+Accept rate limiting as inherent limitation of social media scraping. Educate users that:
+- Instagram/TikTok searches may fail occasionally
+- This is expected behavior, not a bug
+- YouTube and Google Search are more reliable alternatives
+- For production use, consider paid proxy services
+
+**Related**:
+- Quick Search feature (implemented 2026-01-07)
+- Social media providers (Instagram, TikTok)
+
+---
+
+### 10. Instagram Keyword Search Not Supported
+**Status**: Open
+**Priority**: Low
+**Date Identified**: 2026-01-07
+
+**Description**:
+Instagram provider only supports hashtag, profile, and mentions search types. Keyword search is not available, unlike TikTok which supports keyword searches.
+
+**Current Support**:
+- **Instagram**: hashtag, profile, mentions
+- **TikTok**: hashtag, keyword, user
+- **YouTube**: search, channel, video
+
+**Why**:
+The underlying Apify Instagram scraper doesn't provide a keyword search endpoint. Instagram's API and web interface are primarily hashtag-based.
+
+**Workaround**:
+- Use hashtags instead of keywords (e.g., #skincare instead of "skincare")
+- Use profile searches to get content from specific accounts
+- Use TikTok or YouTube for keyword-based searches
+
+**Future Enhancement**:
+Could potentially add keyword search by:
+1. Using Instagram Graph API (requires business account approval)
+2. Using a different scraping provider that supports keywords
+3. Converting keywords to hashtags automatically (e.g., "skin care" → #skincare)
+
+**Related**:
+- Quick Search feature
+- Provider-specific search types
+
+---
+
 ## Infrastructure & DevOps
 
 ### 1. Deployment Automation
@@ -1249,10 +1357,11 @@ CREATE TABLE email_drafts (
 2. **Missing unit tests**: Need comprehensive test coverage for providers, services, and API endpoints
 3. **Database migrations**: Need proper migration system (Alembic) for schema changes
 4. **Configuration management**: Move hardcoded values to environment variables or config files
-5. ~~**Job Execution Service needs Provider Factory pattern**~~: **COMPLETED 2025-12-09** - Implemented Provider Factory pattern, deleted 209 lines of duplicate code. All providers now instantiated dynamically through factory. Related files: `backend/src/services/provider_factory.py`, `backend/src/services/job_execution_service.py`
-6. ~~**Duplicate brand extraction logic across social media processors**~~: **COMPLETED 2025-12-09** - Created shared `BrandMatcher` utility class, deleted 68 lines of duplicate code across 3 processors. All processors now use centralized brand matching with methods `match_in_hashtags()`, `match_in_text()`, `match_in_mentions()`. Single source of truth for brand matching logic, consistent behavior across platforms, easier to add new strategies. Related files: `backend/src/utils/brand_matcher.py`, `backend/src/services/instagram_processor.py`, `backend/src/services/tiktok_processor.py`, `backend/src/services/youtube_processor.py`. **UPDATE 2025-12-09**: Added AI brand extraction to all social media processors with configurable `enable_ai_brand_extraction` option (default: True). Processors now extract ALL brands from captions/descriptions using AI, then combine with hashtag/mention matching. This finds brands like "Alivelab", "Medicube", "Chanel" mentioned in text that hashtags miss.
-7. **Migrate YouTube from Apify to official YouTube Data API v3**: Currently using Apify actor which returns truncated descriptions (~500 chars), preventing AI from extracting brands from product lists mentioned later in descriptions. Need to complete migration to YouTube Data API v3 which returns full descriptions. **Status: PARTIALLY COMPLETE (2025-12-22)** - YouTubeAPIProvider created and factory updated, but needs YouTube API key to be fully operational. Steps to complete: (1) Get YouTube Data API v3 key from https://console.cloud.google.com/apis/credentials, (2) Enable YouTube Data API v3 at https://console.cloud.google.com/apis/library/youtube.googleapis.com, (3) Add key to `.env` as `YOUTUBE_API_KEY`, (4) Restart Celery worker, (5) Test YouTube jobs to verify full descriptions are being fetched. Benefits: Full descriptions with complete product lists, free tier (10,000 quota units/day = ~83 jobs with 20 videos each), more reliable than web scraping, official Google API. Trade-offs: Requires API key setup (one-time, 2 minutes), daily quota limits (sufficient for current usage). Related files: `backend/src/providers/youtube_api_provider.py`, `backend/src/services/provider_factory.py`, `.env`
-8. **Separate report pages for Digital Media and Social Media**: Currently all reports (digital media articles, social media posts) are mixed together in a single Reports page. Need dedicated browsing experiences for each content type. Should add navigation tabs under "History" section: "Digital Media" tab showing list/grid of articles with thumbnail images, publication names, headlines, publish dates, and brand mentions; "Social Media" tab showing list/grid of social posts with platform icons (Instagram/TikTok/YouTube), thumbnails, engagement metrics, creators, and brand mentions. Clicking any item should navigate to a dedicated detail page with full content display: For digital media - full article text, all images, publication metadata, all brands mentioned (tracked + untracked); For social media - post content, video player (if applicable), all engagement metrics, creator profile, platform-specific metadata, all brands mentioned. Benefits: Better content discovery, easier to browse by content type, dedicated detail pages allow richer content display, better user experience for PR teams reviewing mentions. Design considerations: Maintain consistent look/feel with current dashboard, use Material-UI components, responsive design for mobile browsing. Estimated effort: 8-10 hours (2-3 hours frontend routing/navigation, 3-4 hours list/grid views, 3-4 hours detail pages). Related files: `frontend/src/pages/DigitalMediaHistory.tsx` (new), `frontend/src/pages/SocialMediaHistory.tsx` (new), `frontend/src/pages/DigitalMediaDetail.tsx` (new), `frontend/src/pages/SocialMediaDetail.tsx` (new), `frontend/src/components/Layout.tsx` (update navigation)
+5. **Reorganize backend directory structure**: Currently providers and services are mixed in same directories causing confusion. Should separate into clearer structure: `backend/src/providers/` (content providers like InstagramProvider, YouTubeProvider), `backend/src/processors/` (data processors like InstagramProcessor, YouTubeProcessor), `backend/src/services/` (business logic services like QuickSearchService, JobExecutionService), `backend/src/factories/` (factory classes like ProviderFactory, ProcessorFactory). Benefits: Clearer separation of concerns, easier to navigate codebase, follows standard project organization patterns, easier onboarding for new developers. Current issue: provider_factory.py and processor_factory.py are in services directory when they should be in factories directory, processors are in services directory when they should have their own directory. Estimated effort: 2-3 hours (move files, update imports across codebase, test to ensure no breakage). Related files: All files in `backend/src/services/`, `backend/src/providers/`
+6. ~~**Job Execution Service needs Provider Factory pattern**~~: **COMPLETED 2025-12-09** - Implemented Provider Factory pattern, deleted 209 lines of duplicate code. All providers now instantiated dynamically through factory. Related files: `backend/src/services/provider_factory.py`, `backend/src/services/job_execution_service.py`
+7. ~~**Duplicate brand extraction logic across social media processors**~~: **COMPLETED 2025-12-09** - Created shared `BrandMatcher` utility class, deleted 68 lines of duplicate code across 3 processors. All processors now use centralized brand matching with methods `match_in_hashtags()`, `match_in_text()`, `match_in_mentions()`. Single source of truth for brand matching logic, consistent behavior across platforms, easier to add new strategies. Related files: `backend/src/utils/brand_matcher.py`, `backend/src/services/instagram_processor.py`, `backend/src/services/tiktok_processor.py`, `backend/src/services/youtube_processor.py`. **UPDATE 2025-12-09**: Added AI brand extraction to all social media processors with configurable `enable_ai_brand_extraction` option (default: True). Processors now extract ALL brands from captions/descriptions using AI, then combine with hashtag/mention matching. This finds brands like "Alivelab", "Medicube", "Chanel" mentioned in text that hashtags miss.
+8. **Migrate YouTube from Apify to official YouTube Data API v3**: Currently using Apify actor which returns truncated descriptions (~500 chars), preventing AI from extracting brands from product lists mentioned later in descriptions. Need to complete migration to YouTube Data API v3 which returns full descriptions. **Status: COMPLETED (2025-12-22)** - YouTubeAPIProvider created, factory updated, and YouTube API key configured. YouTube jobs now fetch full descriptions with complete product lists. Benefits: Full descriptions with complete product lists, free tier (10,000 quota units/day = ~83 jobs with 20 videos each), more reliable than web scraping, official Google API. Related files: `backend/src/providers/youtube_api_provider.py`, `backend/src/services/provider_factory.py`, `.env`
+9. **Separate report pages for Digital Media and Social Media**: Currently all reports (digital media articles, social media posts) are mixed together in a single Reports page. Need dedicated browsing experiences for each content type. Should add navigation tabs under "History" section: "Digital Media" tab showing list/grid of articles with thumbnail images, publication names, headlines, publish dates, and brand mentions; "Social Media" tab showing list/grid of social posts with platform icons (Instagram/TikTok/YouTube), thumbnails, engagement metrics, creators, and brand mentions. Clicking any item should navigate to a dedicated detail page with full content display: For digital media - full article text, all images, publication metadata, all brands mentioned (tracked + untracked); For social media - post content, video player (if applicable), all engagement metrics, creator profile, platform-specific metadata, all brands mentioned. Benefits: Better content discovery, easier to browse by content type, dedicated detail pages allow richer content display, better user experience for PR teams reviewing mentions. Design considerations: Maintain consistent look/feel with current dashboard, use Material-UI components, responsive design for mobile browsing. Estimated effort: 8-10 hours (2-3 hours frontend routing/navigation, 3-4 hours list/grid views, 3-4 hours detail pages). Related files: `frontend/src/pages/DigitalMediaHistory.tsx` (new), `frontend/src/pages/SocialMediaHistory.tsx` (new), `frontend/src/pages/DigitalMediaDetail.tsx` (new), `frontend/src/pages/SocialMediaDetail.tsx` (new), `frontend/src/components/Layout.tsx` (update navigation)
 9. **Quick Search mode embedded in Dashboard**: Currently users must go through full feed creation process (Feeds page → create feed → configure → save → Tasks page → run task) just to do a one-time exploratory search. Need a "Quick Search" widget embedded in Dashboard between the Reports section and Analytics section above it. Widget should allow instant one-off searches without creating persistent feeds: Select provider type (Instagram hashtag, TikTok keyword, YouTube search, Google News, RSS), enter search term/URL, optionally set result count (default 10, max 50), click "Search Now" button to execute immediately. Results appear inline below the search widget showing preview cards with key info (thumbnail, title, source, brands mentioned, engagement metrics for social). Each result card has "View Details" and "Save to Reports" buttons. Search doesn't create feed or task in database - it's ephemeral/transient. Benefits: Faster ad-hoc research workflow, test searches before committing to scheduled feeds, explore trending topics/hashtags quickly, better user experience for exploratory tasks, reduces clutter in Feeds/Tasks from one-off searches. Technical considerations: Execute search via background Celery task (don't block UI), stream results as they arrive (use WebSocket or polling), cache results client-side for session (don't persist to DB unless user clicks "Save"), rate limit to prevent abuse (max 5 quick searches per 10 minutes), reuse existing provider/processor infrastructure. UI/UX: Collapsible widget (expanded by default), loading state with progress indicator, error handling for failed searches, clear button to reset form. Estimated effort: 6-8 hours (2-3 hours backend API endpoint for transient search, 2-3 hours frontend widget UI, 2 hours results display and caching). Related files: `frontend/src/pages/Dashboard.tsx`, `frontend/src/components/QuickSearchWidget.tsx` (new), `backend/src/api/quick_search.py` (new), `backend/src/services/quick_search_service.py` (new)
 10. **Job execution reporting lacks detail**: Job executions currently only show basic counts like "Processing 5 entries" without information about duplicates detected, failures encountered, or items skipped. This makes troubleshooting difficult and provides no visibility into job health. Should add detailed execution reporting that tracks: duplicate detection (how many items were skipped as duplicates), failure details (which specific items failed and why), success breakdown by provider, processing time per item, memory/resource usage. Should also surface this information in the UI job execution history. Benefits: easier troubleshooting, better visibility into job health, identify problematic feeds/providers, track performance trends. Estimated effort: 4-6 hours. Related files: `backend/src/services/job_execution_service.py`, `backend/src/models/job_execution.py`, `frontend/src/pages/Tasks.tsx`
 11. **Expand AI brand extraction to hashtags and comments**: Currently AI brand extraction only analyzes main content (captions, descriptions, titles). Could extend to also analyze hashtags with AI (to catch complex/misspelled brand mentions) and post comments (where users often mention additional brands in replies). This would provide more comprehensive brand coverage but increase AI costs significantly due to volume of comments. Should add configuration options: `enable_ai_hashtag_extraction` and `enable_ai_comment_extraction` (both default: False). Benefits: catch edge cases like "#chanelinspired" or comment threads discussing competing brands. Trade-offs: Higher AI costs (especially for viral posts with thousands of comments), slower processing. Estimated effort: 3-4 hours. Related files: `backend/src/services/tiktok_processor.py`, `backend/src/services/instagram_processor.py`, `backend/src/services/youtube_processor.py`

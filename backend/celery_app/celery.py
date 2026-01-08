@@ -32,7 +32,8 @@ app = Celery(
     include=[
         'celery_app.tasks.feed_tasks',
         'celery_app.tasks.processing_tasks',
-        'celery_app.tasks.scheduled_tasks'
+        'celery_app.tasks.scheduled_tasks',
+        'celery_app.tasks.quick_search_tasks'
     ]
 )
 

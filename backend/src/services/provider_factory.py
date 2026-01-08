@@ -92,7 +92,7 @@ class ProviderFactory:
             date_restrict = config.get('date_restrict', 'd7') if config else 'd7'
 
             return provider_class(
-                queries=queries,
+                search_queries=queries,
                 results_per_query=results_per_query,
                 date_restrict=date_restrict
             )

@@ -44,6 +44,7 @@ import { brandsApi } from '../api/brands';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { motion } from 'framer-motion';
 import { ReportColumn } from '../components/ReportColumn';
+import QuickSearchWidget from '../components/QuickSearchWidget';
 
 const MotionCard = motion.create(Card);
 const MotionBox = motion.create(Box);
@@ -337,6 +338,19 @@ const Dashboard: React.FC = () => {
           </CardContent>
         </MotionCard>
       )}
+
+      {/* Quick Search Widget */}
+      <MotionBox
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.35 }}
+      >
+        <QuickSearchWidget onSearchComplete={() => {
+          // Invalidate reports queries to refresh the list
+          queryClient.invalidateQueries({ queryKey: ['reports'] });
+          queryClient.invalidateQueries({ queryKey: ['analytics'] });
+        }} />
+      </MotionBox>
 
       {/* Recent Reports */}
       <MotionCard
