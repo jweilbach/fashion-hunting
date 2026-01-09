@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard';
 import Brands from './pages/Brands';
 import Feeds from './pages/Feeds';
 import Jobs from './pages/Jobs';
+import History from './pages/History';
 import Reports from './pages/Reports';
 import theme from './theme/theme';
 
@@ -78,7 +79,17 @@ function App() {
                 }
               />
               <Route
-                path="/reports"
+                path="/history"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <History />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/reports/:categoryId/:providerId"
                 element={
                   <ProtectedRoute>
                     <Layout>
@@ -90,7 +101,7 @@ function App() {
               {/* Legacy route redirects */}
               <Route path="/settings" element={<Navigate to="/feeds" replace />} />
               <Route path="/tasks" element={<Navigate to="/jobs" replace />} />
-              <Route path="/history" element={<Navigate to="/reports" replace />} />
+              <Route path="/reports" element={<Navigate to="/history" replace />} />
 
               {/* Default redirect */}
               <Route path="/" element={<Navigate to="/dashboard" replace />} />

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -15,6 +15,7 @@ import {
   Avatar,
   alpha,
   useTheme,
+  Collapse,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -22,9 +23,13 @@ import {
   Business as BrandIcon,
   WorkOutline as JobsIcon,
   Assessment as ReportsIcon,
+  History as HistoryIcon,
   LogoutOutlined as LogoutIcon,
+  ChevronRight as ChevronRightIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
+import { PROVIDER_CATEGORIES } from '../config/providers';
 
 const drawerWidth = 260;
 
@@ -38,17 +43,64 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const theme = useTheme();
 
+  // Expansion state for Reports menu and its submenus
+  const [reportsExpanded, setReportsExpanded] = useState(() => {
+    // Auto-expand if we're on a reports page
+    return location.pathname.startsWith('/reports/');
+  });
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(() => {
+    // Auto-expand the category if we're viewing a provider within it
+    const expanded = new Set<string>();
+    PROVIDER_CATEGORIES.forEach(category => {
+      category.providers.forEach(provider => {
+        if (location.pathname.includes(`/reports/${category.id}/${provider.route}`)) {
+          expanded.add(category.id);
+        }
+      });
+    });
+    return expanded;
+  });
+
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
+
+  const toggleReportsExpanded = () => {
+    setReportsExpanded(!reportsExpanded);
+  };
+
+  const toggleCategoryExpanded = (categoryId: string) => {
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId);
+      } else {
+        newSet.add(categoryId);
+      }
+      return newSet;
+    });
+  };
+
+  // Check if current path matches a reports provider
+  const isReportsProviderActive = (categoryId: string, providerRoute: string) => {
+    return location.pathname === `/reports/${categoryId}/${providerRoute}`;
+  };
+
+  // Check if any provider in a category is active
+  const isCategoryActive = (categoryId: string) => {
+    return location.pathname.startsWith(`/reports/${categoryId}/`);
+  };
+
+  // Check if we're on any reports page
+  const isReportsActive = location.pathname.startsWith('/reports/');
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
     { text: 'Brands', icon: <BrandIcon />, path: '/brands' },
     { text: 'Feeds', icon: <FeedsIcon />, path: '/feeds' },
     { text: 'Jobs', icon: <JobsIcon />, path: '/jobs' },
-    { text: 'Reports', icon: <ReportsIcon />, path: '/reports' },
+    { text: 'History', icon: <HistoryIcon />, path: '/history' },
   ];
 
   return (
@@ -185,15 +237,159 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     </ListItemIcon>
                     <ListItemText
                       primary={item.text}
-                      primaryTypographyProps={{
-                        fontWeight: isSelected ? 600 : 500,
-                        fontSize: '0.95rem',
+                      slotProps={{
+                        primary: {
+                          fontWeight: isSelected ? 600 : 500,
+                          fontSize: '0.95rem',
+                        },
                       }}
                     />
                   </ListItemButton>
                 </ListItem>
               );
             })}
+
+            {/* Reports - Expandable Section */}
+            <ListItem disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton
+                onClick={toggleReportsExpanded}
+                sx={{
+                  borderRadius: 2,
+                  transition: 'all 0.3s ease',
+                  ...(isReportsActive && {
+                    background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.15)}, ${alpha(theme.palette.secondary.main, 0.15)})`,
+                    boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`,
+                  }),
+                  ...(!isReportsActive && {
+                    '&:hover': {
+                      background: alpha(theme.palette.primary.main, 0.08),
+                      transform: 'translateX(4px)',
+                    },
+                  }),
+                }}
+              >
+                <ListItemIcon
+                  sx={{
+                    minWidth: 40,
+                    color: isReportsActive ? theme.palette.primary.main : theme.palette.text.secondary,
+                  }}
+                >
+                  <ReportsIcon />
+                </ListItemIcon>
+                <ListItemText
+                  primary="Reports"
+                  slotProps={{
+                    primary: {
+                      fontWeight: isReportsActive ? 600 : 500,
+                      fontSize: '0.95rem',
+                    },
+                  }}
+                />
+                {reportsExpanded ? (
+                  <ExpandMoreIcon sx={{ color: theme.palette.text.secondary, fontSize: 20 }} />
+                ) : (
+                  <ChevronRightIcon sx={{ color: theme.palette.text.secondary, fontSize: 20 }} />
+                )}
+              </ListItemButton>
+            </ListItem>
+
+            {/* Reports Submenu - Categories */}
+            <Collapse in={reportsExpanded} timeout="auto" unmountOnExit>
+              <List component="div" disablePadding sx={{ pl: 2 }}>
+                {PROVIDER_CATEGORIES.map((category) => {
+                  const categoryActive = isCategoryActive(category.id);
+                  const categoryExpanded = expandedCategories.has(category.id);
+
+                  return (
+                    <Box key={category.id}>
+                      {/* Category Header */}
+                      <ListItem disablePadding sx={{ mb: 0.25 }}>
+                        <ListItemButton
+                          onClick={() => toggleCategoryExpanded(category.id)}
+                          sx={{
+                            borderRadius: 2,
+                            py: 0.75,
+                            transition: 'all 0.2s ease',
+                            ...(categoryActive && {
+                              background: alpha(theme.palette.primary.main, 0.08),
+                            }),
+                            '&:hover': {
+                              background: alpha(theme.palette.primary.main, 0.08),
+                              transform: 'translateX(4px)',
+                            },
+                          }}
+                        >
+                          <ListItemText
+                            primary={category.label}
+                            slotProps={{
+                              primary: {
+                                fontWeight: categoryActive ? 600 : 500,
+                                fontSize: '0.9rem',
+                                color: categoryActive ? theme.palette.primary.main : theme.palette.text.secondary,
+                              },
+                            }}
+                          />
+                          {categoryExpanded ? (
+                            <ExpandMoreIcon sx={{ color: theme.palette.text.secondary, fontSize: 18 }} />
+                          ) : (
+                            <ChevronRightIcon sx={{ color: theme.palette.text.secondary, fontSize: 18 }} />
+                          )}
+                        </ListItemButton>
+                      </ListItem>
+
+                      {/* Provider Items */}
+                      <Collapse in={categoryExpanded} timeout="auto" unmountOnExit>
+                        <List component="div" disablePadding sx={{ pl: 2 }}>
+                          {category.providers.map((provider) => {
+                            const providerActive = isReportsProviderActive(category.id, provider.route);
+                            const ProviderIcon = provider.icon;
+
+                            return (
+                              <ListItem key={provider.id} disablePadding sx={{ mb: 0.25 }}>
+                                <ListItemButton
+                                  onClick={() => navigate(`/reports/${category.id}/${provider.route}`)}
+                                  sx={{
+                                    borderRadius: 2,
+                                    py: 0.5,
+                                    transition: 'all 0.2s ease',
+                                    ...(providerActive && {
+                                      background: alpha(theme.palette.primary.main, 0.12),
+                                    }),
+                                    '&:hover': {
+                                      background: alpha(theme.palette.primary.main, 0.08),
+                                      transform: 'translateX(4px)',
+                                    },
+                                  }}
+                                >
+                                  <ListItemIcon
+                                    sx={{
+                                      minWidth: 32,
+                                      color: providerActive ? theme.palette.primary.main : theme.palette.text.secondary,
+                                    }}
+                                  >
+                                    <ProviderIcon sx={{ fontSize: 18 }} />
+                                  </ListItemIcon>
+                                  <ListItemText
+                                    primary={provider.label}
+                                    slotProps={{
+                                      primary: {
+                                        fontWeight: providerActive ? 600 : 400,
+                                        fontSize: '0.85rem',
+                                        color: providerActive ? theme.palette.primary.main : theme.palette.text.secondary,
+                                      },
+                                    }}
+                                  />
+                                </ListItemButton>
+                              </ListItem>
+                            );
+                          })}
+                        </List>
+                      </Collapse>
+                    </Box>
+                  );
+                })}
+              </List>
+            </Collapse>
           </List>
 
           {/* Sidebar Footer */}

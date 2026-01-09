@@ -28,7 +28,8 @@ async def list_reports(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
     provider: Optional[str] = Query(None, description="Filter by provider (RSS, TikTok, etc)"),
-    sentiment: Optional[str] = Query(None, description="Filter by sentiment"),
+    sentiment: Optional[str] = Query(None, description="Filter by sentiment (positive, neutral, negative)"),
+    brand: Optional[str] = Query(None, description="Filter by brand name"),
     status: Optional[str] = Query(None, description="Filter by processing status"),
     start_date: Optional[datetime] = Query(None, description="Filter from date"),
     end_date: Optional[datetime] = Query(None, description="Filter to date"),
@@ -42,7 +43,8 @@ async def list_reports(
     - **page**: Page number (default: 1)
     - **page_size**: Items per page (default: 50, max: 100)
     - **provider**: Filter by provider
-    - **sentiment**: Filter by sentiment
+    - **sentiment**: Filter by sentiment (positive, neutral, negative)
+    - **brand**: Filter by brand name
     - **status**: Filter by processing status
     - **start_date**: Filter from date
     - **end_date**: Filter to date
@@ -66,7 +68,9 @@ async def list_reports(
             provider=provider,
             status=status or 'completed',
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            sentiment=sentiment,
+            brand=brand
         )
 
         # Get total count efficiently using count method
@@ -75,7 +79,9 @@ async def list_reports(
             provider=provider,
             status=status or 'completed',
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            sentiment=sentiment,
+            brand=brand
         )
 
     # Calculate pages

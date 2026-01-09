@@ -37,6 +37,8 @@ class ReportRepository:
         status: Optional[str] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
+        sentiment: Optional[str] = None,
+        brand: Optional[str] = None,
     ) -> List[Report]:
         """Get all reports with filters and pagination"""
         query = self.db.query(Report).filter(Report.tenant_id == tenant_id)
@@ -52,6 +54,12 @@ class ReportRepository:
 
         if end_date:
             query = query.filter(Report.timestamp <= end_date)
+
+        if sentiment:
+            query = query.filter(Report.sentiment == sentiment)
+
+        if brand:
+            query = query.filter(Report.brands.contains([brand]))
 
         return query.order_by(desc(Report.timestamp)).offset(skip).limit(limit).all()
 
@@ -148,6 +156,8 @@ class ReportRepository:
         status: Optional[str] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
+        sentiment: Optional[str] = None,
+        brand: Optional[str] = None,
     ) -> int:
         """Count reports with filters"""
         query = self.db.query(func.count(Report.id)).filter(Report.tenant_id == tenant_id)
@@ -163,6 +173,12 @@ class ReportRepository:
 
         if end_date:
             query = query.filter(Report.timestamp <= end_date)
+
+        if sentiment:
+            query = query.filter(Report.sentiment == sentiment)
+
+        if brand:
+            query = query.filter(Report.brands.contains([brand]))
 
         return query.scalar() or 0
 
