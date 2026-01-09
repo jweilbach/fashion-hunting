@@ -373,12 +373,28 @@ WHERE status = 'running' AND completed_at IS NULL;
 ---
 
 ### 6. No Job Execution History View
-**Status**: UX/Analytics Issue
+**Status**: PARTIALLY COMPLETED (2026-01-09)
 **Priority**: High
 **Date Identified**: 2025-11-08
 
+**What Was Implemented**:
+- ✅ Created dedicated "History" page showing all job executions
+- ✅ Grouped executions by job with expandable previous runs
+- ✅ Shows key metrics: status, duration, items processed/failed
+- ✅ Real-time progress bar for running jobs
+- ✅ Execution details dialog with full logs and error messages
+- ✅ Auto-refresh while jobs are running
+- ✅ Renamed old "Reports" page to "History" for clarity
+
+**Still Needed**:
+- [ ] Aggregated statistics (success rate over time, avg duration)
+- [ ] Trend charts for success/failure rates
+- [ ] Filter by status and date range
+- [ ] Export execution history to CSV
+- [ ] Link from execution to reports created during that execution
+
 **Description**:
-There is no UI to view the execution history for scheduled jobs. Users cannot see aggregated statistics, success/failure trends, or detailed execution logs for individual jobs. This makes it difficult to understand job performance, troubleshoot failures, or track improvements over time.
+~~There is no UI to view the execution history for scheduled jobs.~~ Basic execution history view is now available. Users can see job executions grouped by job, with expandable previous runs and detailed execution info. Advanced analytics and filtering features are still needed.
 
 **Current Limitation**:
 - Job executions are stored in the `job_executions` table
@@ -434,14 +450,14 @@ There is no UI to view the execution history for scheduled jobs. Users cannot se
 - Sort by duration, items processed, date
 
 **Acceptance Criteria**:
-- [ ] Add "Execution History" tab/page for each job
-- [ ] Display table of recent executions (last 50-100)
+- [x] Add "Execution History" tab/page for each job ✅ (History page with grouped executions)
+- [x] Display table of recent executions (last 50-100) ✅ (All executions shown, grouped by job)
 - [ ] Show aggregated statistics (success rate, avg duration, total items)
-- [ ] Implement execution detail view with full logs
+- [x] Implement execution detail view with full logs ✅ (Details dialog with logs)
 - [ ] Add charts for success rate trends over time
 - [ ] Filter executions by status and date range
 - [ ] Link from execution to reports created during that execution
-- [ ] Show currently running execution with live progress
+- [x] Show currently running execution with live progress ✅ (Progress bar with current item)
 - [ ] Export execution history to CSV for analysis
 
 **API Endpoints Needed**:
@@ -1344,6 +1360,14 @@ Could potentially add keyword search by:
 ## Notes
 
 ### Decision Log
+
+**2026-01-09**: Implemented expandable Reports navigation in sidebar with provider-specific reports pages. Key changes:
+- Renamed old "Reports" page to "History" (shows job execution history)
+- Created new expandable "Reports" section in sidebar with Social Media (Instagram, TikTok, YouTube) and Digital Media (Google News, RSS) categories
+- Created provider configuration system (`frontend/src/config/providers.ts`) for easy maintainability - new providers can be added by updating a single config
+- New Reports page (`frontend/src/pages/Reports.tsx`) with filtering by provider, sentiment, brand, and search
+- Backend updated to support sentiment and brand filtering in reports API
+- Fixed provider name mismatch: frontend sends uppercase IDs (TIKTOK, YOUTUBE) but backend stores mixed case (TikTok, YouTube) - added mapping in frontend API
 
 **2025-11-08**: Decided to defer duplicate logging fix until we implement centralized logging for production. The current behavior is acceptable for development and doesn't block feature work.
 
