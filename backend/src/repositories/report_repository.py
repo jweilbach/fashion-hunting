@@ -39,6 +39,7 @@ class ReportRepository:
         end_date: Optional[datetime] = None,
         sentiment: Optional[str] = None,
         brand: Optional[str] = None,
+        source_type: Optional[str] = None,
     ) -> List[Report]:
         """Get all reports with filters and pagination"""
         query = self.db.query(Report).filter(Report.tenant_id == tenant_id)
@@ -60,6 +61,9 @@ class ReportRepository:
 
         if brand:
             query = query.filter(Report.brands.contains([brand]))
+
+        if source_type:
+            query = query.filter(Report.source_type == source_type)
 
         return query.order_by(desc(Report.timestamp)).offset(skip).limit(limit).all()
 
@@ -158,6 +162,7 @@ class ReportRepository:
         end_date: Optional[datetime] = None,
         sentiment: Optional[str] = None,
         brand: Optional[str] = None,
+        source_type: Optional[str] = None,
     ) -> int:
         """Count reports with filters"""
         query = self.db.query(func.count(Report.id)).filter(Report.tenant_id == tenant_id)
@@ -179,6 +184,9 @@ class ReportRepository:
 
         if brand:
             query = query.filter(Report.brands.contains([brand]))
+
+        if source_type:
+            query = query.filter(Report.source_type == source_type)
 
         return query.scalar() or 0
 

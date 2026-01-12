@@ -3,6 +3,7 @@ Reports Router
 Handles CRUD operations for media reports
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
@@ -10,6 +11,8 @@ from uuid import UUID
 import sys
 from pathlib import Path
 from math import ceil
+import csv
+import io
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
@@ -34,6 +37,7 @@ async def list_reports(
     start_date: Optional[datetime] = Query(None, description="Filter from date"),
     end_date: Optional[datetime] = Query(None, description="Filter to date"),
     search: Optional[str] = Query(None, description="Search in title and summary"),
+    source_type: Optional[str] = Query(None, description="Filter by source type (social, digital)"),
     current_user: User = Depends(require_viewer),
     db: Session = Depends(get_db)
 ):
@@ -49,6 +53,7 @@ async def list_reports(
     - **start_date**: Filter from date
     - **end_date**: Filter to date
     - **search**: Search in title and summary
+    - **source_type**: Filter by source type (social, digital)
     """
     repo = ReportRepository(db)
 
@@ -70,7 +75,8 @@ async def list_reports(
             start_date=start_date,
             end_date=end_date,
             sentiment=sentiment,
-            brand=brand
+            brand=brand,
+            source_type=source_type
         )
 
         # Get total count efficiently using count method
@@ -81,7 +87,8 @@ async def list_reports(
             start_date=start_date,
             end_date=end_date,
             sentiment=sentiment,
-            brand=brand
+            brand=brand,
+            source_type=source_type
         )
 
     # Calculate pages
@@ -194,3 +201,167 @@ async def delete_report(
 
     repo.delete(report_id)
     return None
+
+
+@router.post("/export")
+async def export_reports(
+    format: str = Query("csv", description="Export format: csv or excel"),
+    report_ids: Optional[List[str]] = Query(None, description="Specific report IDs to export"),
+    provider: Optional[str] = Query(None, description="Filter by provider"),
+    sentiment: Optional[str] = Query(None, description="Filter by sentiment"),
+    brand: Optional[str] = Query(None, description="Filter by brand"),
+    start_date: Optional[datetime] = Query(None, description="Filter from date"),
+    end_date: Optional[datetime] = Query(None, description="Filter to date"),
+    search: Optional[str] = Query(None, description="Search in title and summary"),
+    current_user: User = Depends(require_viewer),
+    db: Session = Depends(get_db)
+):
+    """
+    Export reports to CSV or Excel format
+
+    - **format**: Export format - 'csv' or 'excel' (default: csv)
+    - **report_ids**: Optional list of specific report IDs to export
+    - **provider**: Filter by provider (if no report_ids specified)
+    - **sentiment**: Filter by sentiment
+    - **brand**: Filter by brand
+    - **start_date**: Filter from date
+    - **end_date**: Filter to date
+    - **search**: Search in title and summary
+    """
+    repo = ReportRepository(db)
+
+    # Get reports - either by IDs or by filters
+    if report_ids and len(report_ids) > 0:
+        # Fetch specific reports by IDs
+        reports = []
+        for rid in report_ids:
+            try:
+                report = repo.get_by_id(UUID(rid))
+                if report and report.tenant_id == current_user.tenant_id:
+                    reports.append(report)
+            except ValueError:
+                continue  # Skip invalid UUIDs
+    else:
+        # Use filters to get reports (up to 1000 for export)
+        if search:
+            reports = repo.search(current_user.tenant_id, search, limit=1000)
+        else:
+            reports = repo.get_all(
+                tenant_id=current_user.tenant_id,
+                skip=0,
+                limit=1000,
+                provider=provider,
+                status='completed',
+                start_date=start_date,
+                end_date=end_date,
+                sentiment=sentiment,
+                brand=brand
+            )
+
+    if not reports:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No reports found to export"
+        )
+
+    # Define headers
+    headers = ['Title', 'Provider', 'Date', 'Sentiment', 'Topic', 'Brands', 'Reach', 'Source', 'Link', 'Summary']
+
+    if format.lower() == 'excel':
+        return _export_to_excel(reports, headers)
+    else:
+        return _export_to_csv(reports, headers)
+
+
+def _format_date(dt: datetime) -> str:
+    """Format datetime for export"""
+    if dt:
+        return dt.strftime('%Y-%m-%d %H:%M')
+    return ''
+
+
+def _export_to_csv(reports, headers):
+    """Generate CSV file from reports"""
+    output = io.StringIO()
+    writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
+
+    # Write header
+    writer.writerow(headers)
+
+    # Write data rows
+    for report in reports:
+        row = [
+            report.title or '',
+            report.provider or '',
+            _format_date(report.timestamp),
+            report.sentiment or '',
+            report.topic or '',
+            ', '.join(report.brands) if report.brands else '',
+            str(report.est_reach or 0),
+            report.source or '',
+            report.link or '',
+            report.summary or ''
+        ]
+        writer.writerow(row)
+
+    output.seek(0)
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=reports.csv"
+        }
+    )
+
+
+def _export_to_excel(reports, headers):
+    """Generate Excel (.xlsx) file from reports using openpyxl"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Reports"
+
+    # Style for header row
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+
+    # Write header row
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    # Write data rows
+    for row_idx, report in enumerate(reports, 2):
+        ws.cell(row=row_idx, column=1, value=report.title or '')
+        ws.cell(row=row_idx, column=2, value=report.provider or '')
+        ws.cell(row=row_idx, column=3, value=_format_date(report.timestamp))
+        ws.cell(row=row_idx, column=4, value=report.sentiment or '')
+        ws.cell(row=row_idx, column=5, value=report.topic or '')
+        ws.cell(row=row_idx, column=6, value=', '.join(report.brands) if report.brands else '')
+        ws.cell(row=row_idx, column=7, value=report.est_reach or 0)
+        ws.cell(row=row_idx, column=8, value=report.source or '')
+        ws.cell(row=row_idx, column=9, value=report.link or '')
+        ws.cell(row=row_idx, column=10, value=report.summary or '')
+
+    # Auto-adjust column widths (approximate)
+    column_widths = [40, 15, 20, 12, 15, 30, 12, 30, 50, 60]
+    for col, width in enumerate(column_widths, 1):
+        ws.column_dimensions[ws.cell(row=1, column=col).column_letter].width = width
+
+    # Save to bytes buffer
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": "attachment; filename=reports.xlsx"
+        }
+    )

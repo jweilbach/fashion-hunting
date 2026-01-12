@@ -13,7 +13,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Function to kill process by port
+# Function to kill process by port with escalating signals
 kill_by_port() {
     local port=$1
     local service=$2
@@ -21,45 +21,100 @@ kill_by_port() {
     echo -e "${YELLOW}Stopping $service on port $port...${NC}"
 
     # Find the process using the port
-    local pid=$(lsof -ti :$port)
+    local pid=$(lsof -ti :$port 2>/dev/null || true)
 
     if [ -z "$pid" ]; then
         echo -e "${GREEN}✓ $service is not running${NC}"
-    else
-        kill -15 $pid 2>/dev/null || kill -9 $pid 2>/dev/null
-        sleep 1
+        return 0
+    fi
 
-        # Check if process is still running
-        if lsof -ti :$port > /dev/null 2>&1; then
-            echo -e "${RED}✗ Failed to stop $service${NC}"
-        else
-            echo -e "${GREEN}✓ $service stopped${NC}"
-        fi
+    # Attempt 1: SIGTERM (graceful)
+    echo -e "${YELLOW}  Sending SIGTERM to PID $pid...${NC}"
+    kill -15 $pid 2>/dev/null || true
+    sleep 2
+
+    # Check if still running
+    if ! lsof -ti :$port > /dev/null 2>&1; then
+        echo -e "${GREEN}✓ $service stopped gracefully${NC}"
+        return 0
+    fi
+
+    # Attempt 2: SIGKILL (force)
+    pid=$(lsof -ti :$port 2>/dev/null || true)
+    if [ -n "$pid" ]; then
+        echo -e "${YELLOW}  Process still running, forcing SIGKILL...${NC}"
+        kill -9 $pid 2>/dev/null || true
+        sleep 1
+    fi
+
+    # Final verification
+    if lsof -ti :$port > /dev/null 2>&1; then
+        echo -e "${RED}✗ Failed to stop $service on port $port${NC}"
+        return 1
+    else
+        echo -e "${GREEN}✓ $service stopped${NC}"
+        return 0
     fi
 }
 
-# Function to kill process by name pattern
+# Function to kill process by name pattern with escalating signals
 kill_by_name() {
     local pattern=$1
     local service=$2
+    local max_attempts=3
 
     echo -e "${YELLOW}Stopping $service...${NC}"
 
     # Find processes matching the pattern
-    local pids=$(pgrep -f "$pattern" || true)
+    local pids=$(pgrep -f "$pattern" 2>/dev/null || true)
 
     if [ -z "$pids" ]; then
         echo -e "${GREEN}✓ $service is not running${NC}"
-    else
-        echo "$pids" | xargs kill -15 2>/dev/null || echo "$pids" | xargs kill -9 2>/dev/null
-        sleep 1
+        return 0
+    fi
 
-        # Check if any processes are still running
-        if pgrep -f "$pattern" > /dev/null 2>&1; then
-            echo -e "${RED}✗ Failed to stop $service${NC}"
-        else
-            echo -e "${GREEN}✓ $service stopped${NC}"
-        fi
+    local count=$(echo "$pids" | wc -l | tr -d ' ')
+    echo -e "${YELLOW}  Found $count process(es) to stop${NC}"
+
+    # Attempt 1: SIGTERM (graceful)
+    echo -e "${YELLOW}  Sending SIGTERM...${NC}"
+    echo "$pids" | xargs kill -15 2>/dev/null || true
+    sleep 2
+
+    # Check if still running
+    pids=$(pgrep -f "$pattern" 2>/dev/null || true)
+    if [ -z "$pids" ]; then
+        echo -e "${GREEN}✓ $service stopped gracefully${NC}"
+        return 0
+    fi
+
+    # Attempt 2: SIGINT
+    echo -e "${YELLOW}  Processes still running, sending SIGINT...${NC}"
+    echo "$pids" | xargs kill -2 2>/dev/null || true
+    sleep 2
+
+    # Check if still running
+    pids=$(pgrep -f "$pattern" 2>/dev/null || true)
+    if [ -z "$pids" ]; then
+        echo -e "${GREEN}✓ $service stopped${NC}"
+        return 0
+    fi
+
+    # Attempt 3: SIGKILL (force)
+    echo -e "${YELLOW}  Processes still running, forcing SIGKILL...${NC}"
+    echo "$pids" | xargs kill -9 2>/dev/null || true
+    sleep 1
+
+    # Final verification
+    pids=$(pgrep -f "$pattern" 2>/dev/null || true)
+    if [ -z "$pids" ]; then
+        echo -e "${GREEN}✓ $service stopped (forced)${NC}"
+        return 0
+    else
+        local remaining=$(echo "$pids" | wc -l | tr -d ' ')
+        echo -e "${RED}✗ Failed to stop $service ($remaining process(es) still running)${NC}"
+        echo -e "${RED}  PIDs: $pids${NC}"
+        return 1
     fi
 }
 

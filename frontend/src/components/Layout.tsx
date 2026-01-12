@@ -27,6 +27,7 @@ import {
   LogoutOutlined as LogoutIcon,
   ChevronRight as ChevronRightIcon,
   ExpandMore as ExpandMoreIcon,
+  ViewList as ViewAllIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { PROVIDER_CATEGORIES } from '../config/providers';
@@ -87,9 +88,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     return location.pathname === `/reports/${categoryId}/${providerRoute}`;
   };
 
+  // Check if "All" for a category is active (category path without provider)
+  const isCategoryAllActive = (categoryId: string) => {
+    return location.pathname === `/reports/${categoryId}`;
+  };
+
   // Check if any provider in a category is active
   const isCategoryActive = (categoryId: string) => {
-    return location.pathname.startsWith(`/reports/${categoryId}/`);
+    return location.pathname.startsWith(`/reports/${categoryId}`);
   };
 
   // Check if we're on any reports page
@@ -340,6 +346,44 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                       {/* Provider Items */}
                       <Collapse in={categoryExpanded} timeout="auto" unmountOnExit>
                         <List component="div" disablePadding sx={{ pl: 2 }}>
+                          {/* "All" option for category */}
+                          <ListItem disablePadding sx={{ mb: 0.25 }}>
+                            <ListItemButton
+                              onClick={() => navigate(`/reports/${category.id}`)}
+                              sx={{
+                                borderRadius: 2,
+                                py: 0.5,
+                                transition: 'all 0.2s ease',
+                                ...(isCategoryAllActive(category.id) && {
+                                  background: alpha(theme.palette.primary.main, 0.12),
+                                }),
+                                '&:hover': {
+                                  background: alpha(theme.palette.primary.main, 0.08),
+                                  transform: 'translateX(4px)',
+                                },
+                              }}
+                            >
+                              <ListItemIcon
+                                sx={{
+                                  minWidth: 32,
+                                  color: isCategoryAllActive(category.id) ? theme.palette.primary.main : theme.palette.text.secondary,
+                                }}
+                              >
+                                <ViewAllIcon sx={{ fontSize: 18 }} />
+                              </ListItemIcon>
+                              <ListItemText
+                                primary={`All ${category.label}`}
+                                slotProps={{
+                                  primary: {
+                                    fontWeight: isCategoryAllActive(category.id) ? 600 : 400,
+                                    fontSize: '0.85rem',
+                                    color: isCategoryAllActive(category.id) ? theme.palette.primary.main : theme.palette.text.secondary,
+                                  },
+                                }}
+                              />
+                            </ListItemButton>
+                          </ListItem>
+
                           {category.providers.map((provider) => {
                             const providerActive = isReportsProviderActive(category.id, provider.route);
                             const ProviderIcon = provider.icon;

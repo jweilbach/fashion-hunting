@@ -89,6 +89,16 @@ function App() {
                 }
               />
               <Route
+                path="/reports/:categoryId"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Reports />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/reports/:categoryId/:providerId"
                 element={
                   <ProtectedRoute>

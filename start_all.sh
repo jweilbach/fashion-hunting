@@ -17,6 +17,58 @@ NC='\033[0m' # No Color
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+# =============================================================================
+# PRE-FLIGHT CHECKS - Detect and clean up leaked processes
+# =============================================================================
+
+echo -e "${BLUE}Running pre-flight checks...${NC}"
+
+# Count existing Celery processes
+celery_count=$(pgrep -f "celery" 2>/dev/null | wc -l | tr -d ' ')
+if [ "$celery_count" -gt 4 ]; then
+    echo -e "${RED}⚠ WARNING: Found $celery_count Celery processes (expected max 4)${NC}"
+    echo -e "${YELLOW}This indicates a process leak. Running cleanup...${NC}"
+    "$SCRIPT_DIR/stop_all.sh"
+    sleep 2
+    echo -e "${GREEN}✓ Cleanup complete${NC}"
+fi
+
+# Check for orphaned processes on ports
+check_and_warn_port() {
+    local port=$1
+    local service=$2
+    local pid=$(lsof -ti :$port 2>/dev/null || true)
+
+    if [ -n "$pid" ]; then
+        echo -e "${YELLOW}⚠ Found existing process on port $port ($service)${NC}"
+        return 0
+    fi
+    return 1
+}
+
+# If any service is already running, offer to restart cleanly
+existing_services=0
+check_and_warn_port 8000 "Backend API" && existing_services=$((existing_services + 1))
+check_and_warn_port 5173 "Frontend" && existing_services=$((existing_services + 1))
+if pgrep -f "celery.*worker" > /dev/null 2>&1; then
+    echo -e "${YELLOW}⚠ Found existing Celery worker process${NC}"
+    existing_services=$((existing_services + 1))
+fi
+
+if [ "$existing_services" -gt 0 ]; then
+    echo -e "${YELLOW}Found $existing_services existing service(s). Stopping them first...${NC}"
+    "$SCRIPT_DIR/stop_all.sh"
+    sleep 2
+    echo -e "${GREEN}✓ Existing services stopped${NC}"
+fi
+
+echo -e "${GREEN}✓ Pre-flight checks complete${NC}"
+echo ""
+
+# =============================================================================
+# SERVICE STARTUP
+# =============================================================================
+
 # Check if services are already running
 check_running() {
     local port=$1

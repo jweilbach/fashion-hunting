@@ -24,6 +24,9 @@ import {
   Collapse,
   Link,
   Tooltip,
+  Checkbox,
+  Button,
+  Menu,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -41,6 +44,8 @@ import {
   YouTube as YouTubeIcon,
   Newspaper as NewsIcon,
   RssFeed as RssIcon,
+  Download as DownloadIcon,
+  ViewList as ViewAllIcon,
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { reportsApi, type ReportsQueryParams } from '../api/reports';
@@ -66,25 +71,35 @@ const Reports: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sentimentFilter, setSentimentFilter] = useState<string>('');
   const [brandFilter, setBrandFilter] = useState<string>('');
+  const [providerFilter, setProviderFilter] = useState<string>('');
   const [page, setPage] = useState(1);
   const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
 
+  // State for selection and export
+  const [selectedReports, setSelectedReports] = useState<Set<string>>(new Set());
+  const [exportMenuAnchor, setExportMenuAnchor] = useState<null | HTMLElement>(null);
+
+  // Determine the effective provider for filtering
+  // If viewing category-level (no providerId), use the providerFilter dropdown
+  // If viewing provider-level, use the provider from URL
+  const effectiveProviderId = provider?.id || (providerFilter || undefined);
+
   // Build query params
   const queryParams: ReportsQueryParams = useMemo(() => ({
-    provider: provider?.id,
+    provider: effectiveProviderId,
     source_type: category?.sourceType,
     sentiment: sentimentFilter || undefined,
     brand: brandFilter || undefined,
     search: searchQuery || undefined,
     skip: (page - 1) * ITEMS_PER_PAGE,
     limit: ITEMS_PER_PAGE,
-  }), [provider?.id, category?.sourceType, sentimentFilter, brandFilter, searchQuery, page]);
+  }), [effectiveProviderId, category?.sourceType, sentimentFilter, brandFilter, searchQuery, page]);
 
-  // Fetch reports
+  // Fetch reports - enabled when we have a category
   const { data: reportsData, isLoading, error } = useQuery({
     queryKey: ['reports', queryParams],
     queryFn: () => reportsApi.getReports(queryParams),
-    enabled: !!provider,
+    enabled: !!category,
   });
 
   // Fetch brands for filter dropdown
@@ -104,6 +119,48 @@ const Reports: React.FC = () => {
       return newSet;
     });
   };
+
+  const toggleSelected = (reportId: string) => {
+    setSelectedReports(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(reportId)) {
+        newSet.delete(reportId);
+      } else {
+        newSet.add(reportId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllOnPage = () => {
+    if (reportsData?.items) {
+      setSelectedReports(prev => {
+        const newSet = new Set(prev);
+        reportsData.items.forEach(r => newSet.add(r.id));
+        return newSet;
+      });
+    }
+  };
+
+  const deselectAllOnPage = () => {
+    if (reportsData?.items) {
+      setSelectedReports(prev => {
+        const newSet = new Set(prev);
+        reportsData.items.forEach(r => newSet.delete(r.id));
+        return newSet;
+      });
+    }
+  };
+
+  const clearAllSelections = () => {
+    setSelectedReports(new Set());
+  };
+
+  // Check if all items on current page are selected
+  const allOnPageSelected = reportsData?.items?.every(r => selectedReports.has(r.id)) ?? false;
+
+  // Count how many items on current page are selected
+  const selectedOnPage = reportsData?.items?.filter(r => selectedReports.has(r.id)).length ?? 0;
 
   const getSentimentIcon = (sentiment: string) => {
     switch (sentiment) {
@@ -132,8 +189,10 @@ const Reports: React.FC = () => {
       case 'INSTAGRAM':
         return <InstagramIcon />;
       case 'TIKTOK':
+      case 'TikTok':
         return <TikTokIcon />;
       case 'YOUTUBE':
+      case 'YouTube':
         return <YouTubeIcon />;
       case 'GOOGLE_SEARCH':
         return <NewsIcon />;
@@ -164,25 +223,65 @@ const Reports: React.FC = () => {
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
-    setPage(1); // Reset to first page on search
+    setPage(1);
   };
 
   const handlePageChange = (_: React.ChangeEvent<unknown>, value: number) => {
     setPage(value);
   };
 
-  // If no provider selected, show a message
-  if (!provider || !category) {
+  // Export functions - now using backend API
+  const [isExporting, setIsExporting] = useState(false);
+
+  const exportToCSV = async () => {
+    if (selectedReports.size === 0) return;
+    setIsExporting(true);
+    try {
+      await reportsApi.exportReports({
+        format: 'csv',
+        report_ids: Array.from(selectedReports),
+      });
+    } catch (error) {
+      console.error('Export failed:', error);
+    } finally {
+      setIsExporting(false);
+      setExportMenuAnchor(null);
+    }
+  };
+
+  const exportToExcel = async () => {
+    if (selectedReports.size === 0) return;
+    setIsExporting(true);
+    try {
+      await reportsApi.exportReports({
+        format: 'excel',
+        report_ids: Array.from(selectedReports),
+      });
+    } catch (error) {
+      console.error('Export failed:', error);
+    } finally {
+      setIsExporting(false);
+      setExportMenuAnchor(null);
+    }
+  };
+
+  // If no category selected, show a message
+  if (!category) {
     return (
       <Box>
         <Alert severity="info">
-          Please select a provider from the sidebar to view reports.
+          Please select a category from the sidebar to view reports.
         </Alert>
       </Box>
     );
   }
 
-  const ProviderIcon = provider.icon;
+  // Determine if we're viewing all providers in category or a specific provider
+  const isViewingAll = !provider;
+  const pageTitle = isViewingAll ? `All ${category.label} Reports` : `${provider.label} Reports`;
+  const pageSubtitle = isViewingAll
+    ? `Browse and search all ${category.label.toLowerCase()} reports`
+    : `${category.label} • Browse and search your ${provider.label} reports`;
 
   return (
     <Box>
@@ -206,14 +305,14 @@ const Reports: React.FC = () => {
               background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
             }}
           >
-            <ProviderIcon />
+            {isViewingAll ? <ViewAllIcon /> : provider && <provider.icon />}
           </Avatar>
           <Box>
             <Typography variant="h3" sx={{ fontWeight: 600 }}>
-              {provider.label} Reports
+              {pageTitle}
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              {category.label} • Browse and search your {provider.label} reports
+              {pageSubtitle}
             </Typography>
           </Box>
         </Box>
@@ -228,12 +327,48 @@ const Reports: React.FC = () => {
           background: alpha(theme.palette.background.paper, 0.8),
         }}
       >
-        <Box display="flex" alignItems="center" gap={1} mb={2}>
-          <FilterIcon color="action" />
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            Filters
-          </Typography>
+        <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+          <Box display="flex" alignItems="center" gap={1}>
+            <FilterIcon color="action" />
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              Filters
+            </Typography>
+          </Box>
+
+          {/* Export Button */}
+          {selectedReports.size > 0 && (
+            <Box display="flex" alignItems="center" gap={1}>
+              <Typography variant="body2" color="text.secondary">
+                {selectedReports.size} selected
+              </Typography>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={clearAllSelections}
+              >
+                Clear All
+              </Button>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={isExporting ? <CircularProgress size={16} color="inherit" /> : <DownloadIcon />}
+                onClick={(e) => setExportMenuAnchor(e.currentTarget)}
+                disabled={isExporting}
+              >
+                {isExporting ? 'Exporting...' : 'Export'}
+              </Button>
+              <Menu
+                anchorEl={exportMenuAnchor}
+                open={Boolean(exportMenuAnchor)}
+                onClose={() => setExportMenuAnchor(null)}
+              >
+                <MenuItem onClick={exportToCSV}>Export as CSV</MenuItem>
+                <MenuItem onClick={exportToExcel}>Export as Excel</MenuItem>
+              </Menu>
+            </Box>
+          )}
         </Box>
+
         <Box display="flex" gap={2} flexWrap="wrap">
           {/* Search */}
           <TextField
@@ -252,6 +387,28 @@ const Reports: React.FC = () => {
               },
             }}
           />
+
+          {/* Provider Filter - only show when viewing all in category */}
+          {isViewingAll && (
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Provider</InputLabel>
+              <Select
+                value={providerFilter}
+                label="Provider"
+                onChange={(e) => {
+                  setProviderFilter(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <MenuItem value="">All Providers</MenuItem>
+                {category.providers.map((p) => (
+                  <MenuItem key={p.id} value={p.id}>
+                    {p.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
 
           {/* Sentiment Filter */}
           <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -310,30 +467,50 @@ const Reports: React.FC = () => {
       {/* Reports List */}
       {!isLoading && !error && reportsData && (
         <>
-          {/* Results Count */}
+          {/* Results Count and Select All */}
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
             <Typography variant="body2" color="text.secondary">
               Showing {reportsData.items.length} of {reportsData.total} reports
             </Typography>
+            {reportsData.items.length > 0 && (
+              <Box display="flex" alignItems="center" gap={1}>
+                <Button
+                  size="small"
+                  onClick={allOnPageSelected ? deselectAllOnPage : selectAllOnPage}
+                >
+                  {allOnPageSelected ? 'Deselect Page' : 'Select Page'}
+                </Button>
+                {selectedOnPage > 0 && selectedOnPage < reportsData.items.length && (
+                  <Typography variant="caption" color="text.secondary">
+                    ({selectedOnPage} on this page)
+                  </Typography>
+                )}
+              </Box>
+            )}
           </Box>
 
           {/* No Results */}
           {reportsData.items.length === 0 ? (
             <Card sx={{ p: 6, textAlign: 'center' }}>
-              <ProviderIcon sx={{ fontSize: 64, color: theme.palette.text.secondary, mb: 2 }} />
+              {isViewingAll ? (
+                <ViewAllIcon sx={{ fontSize: 64, color: theme.palette.text.secondary, mb: 2 }} />
+              ) : (
+                provider && <provider.icon sx={{ fontSize: 64, color: theme.palette.text.secondary, mb: 2 }} />
+              )}
               <Typography variant="h6" color="text.secondary" gutterBottom>
                 No reports found
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {searchQuery || sentimentFilter || brandFilter
+                {searchQuery || sentimentFilter || brandFilter || providerFilter
                   ? 'Try adjusting your filters to see more results'
-                  : `No ${provider.label} reports have been generated yet`}
+                  : `No ${isViewingAll ? category.label.toLowerCase() : provider?.label} reports have been generated yet`}
               </Typography>
             </Card>
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {reportsData.items.map((report: Report, index: number) => {
                 const isExpanded = expandedReports.has(report.id);
+                const isSelected = selectedReports.has(report.id);
                 const sentimentColor = getSentimentColor(report.sentiment);
 
                 return (
@@ -349,11 +526,22 @@ const Reports: React.FC = () => {
                       },
                       transition: 'all 0.3s ease',
                       borderLeft: `4px solid ${sentimentColor}`,
+                      ...(isSelected && {
+                        background: alpha(theme.palette.primary.main, 0.05),
+                        borderColor: theme.palette.primary.main,
+                      }),
                     }}
                   >
                     <CardContent sx={{ p: 3 }}>
                       {/* Main Content */}
                       <Box display="flex" alignItems="flex-start" gap={2}>
+                        {/* Checkbox */}
+                        <Checkbox
+                          checked={isSelected}
+                          onChange={() => toggleSelected(report.id)}
+                          sx={{ mt: -0.5 }}
+                        />
+
                         {/* Provider Icon */}
                         <Avatar
                           sx={{

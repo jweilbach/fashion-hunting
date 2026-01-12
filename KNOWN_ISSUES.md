@@ -675,12 +675,28 @@ After fix, the resolver correctly skips image URLs and continues searching for v
 ---
 
 ### 8. Process Leak Causes Performance Degradation
-**Status**: Critical Performance Issue
+**Status**: Fixed
 **Priority**: High
 **Date Identified**: 2025-11-08
+**Date Fixed**: 2026-01-12
+
+**Fix Applied**:
+Updated both `stop_all.sh` and `start_all.sh` to prevent and clean up process leaks:
+
+1. **stop_all.sh improvements**:
+   - Escalating signal approach: SIGTERM → SIGINT → SIGKILL
+   - Verification after each attempt to confirm processes are dead
+   - Clear feedback showing how many processes were found and stopped
+   - Returns error code if processes can't be killed
+
+2. **start_all.sh improvements**:
+   - Pre-flight checks detect process leaks (>4 Celery processes)
+   - Automatically runs stop_all.sh if existing services are found
+   - Checks all ports before starting new services
+   - Prevents duplicate process accumulation
 
 **Description**:
-When start scripts are run multiple times without properly stopping previous instances (especially after failures or errors), duplicate Celery worker processes accumulate, causing severe performance degradation. The `stop_all.sh` script fails to reliably kill Celery workers, leading to process leaks that consume CPU, memory, and database connections.
+~~When start scripts are run multiple times without properly stopping previous instances (especially after failures or errors), duplicate Celery worker processes accumulate, causing severe performance degradation.~~ This issue is now fixed. The scripts automatically detect and clean up leaked processes.
 
 **Observed Symptoms**:
 - UI becomes extremely slow and unresponsive
