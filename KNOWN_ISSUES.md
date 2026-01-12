@@ -1049,10 +1049,17 @@ This is a **high-priority** issue because:
 **Description**: Enhanced export capabilities and custom reports
 **Dependencies**: None
 **Estimate**: 2-3 days
+**Status**: PARTIALLY COMPLETED (2026-01-12)
 
-**Acceptance Criteria**:
+**Completed (2026-01-12)**:
+- [x] CSV export for reports
+- [x] Excel (.xlsx) export for reports with styled headers
+- [x] Selection persists across pages for multi-page exports
+- [x] Backend-generated exports (not client-side)
+
+**Acceptance Criteria (Remaining)**:
 - [ ] PDF export for reports
-- [ ] Custom date range exports
+- [ ] Custom date range exports (filter by date range before export)
 - [ ] Scheduled report delivery via email
 - [ ] Custom report templates
 - [ ] Data visualization and charts
@@ -1376,6 +1383,15 @@ Could potentially add keyword search by:
 ## Notes
 
 ### Decision Log
+
+**2026-01-12**: Implemented Reports export functionality and category-level filtering. Key changes:
+- Added backend export endpoint (`POST /api/v1/reports/export`) supporting CSV and Excel formats
+- Excel export uses `openpyxl` for proper `.xlsx` files with styled headers
+- Selection persists across pages - users can select reports from multiple pages before exporting
+- Added `source_type` filter to backend API for category-level filtering (social vs digital)
+- Fixed "View All" Social/Digital to correctly filter by source_type instead of showing all reports
+- Frontend export buttons call backend API instead of generating files client-side
+- Export menu shows loading state during download
 
 **2026-01-09**: Implemented expandable Reports navigation in sidebar with provider-specific reports pages. Key changes:
 - Renamed old "Reports" page to "History" (shows job execution history)
@@ -2089,8 +2105,11 @@ Brands like Color Wow give products to influencers, and PR teams need to monitor
 **Description**:
 Users want to export reports, brand mentions, and analytics to Google Sheets or Google Docs for sharing with clients and team collaboration.
 
+**Note**: Basic CSV/Excel export is now available (2026-01-12). Users can export to Excel and then upload to Google Sheets manually. This feature would add direct integration.
+
 **Acceptance Criteria**:
-- [ ] "Export to Google Sheets" button on reports page
+- [x] Export to Excel format (workaround: upload to Google Sheets) - COMPLETED 2026-01-12
+- [ ] "Export to Google Sheets" button on reports page (direct integration)
 - [ ] "Export to Google Docs" for formatted reports
 - [ ] Configure which columns/fields to export
 - [ ] Google OAuth integration
