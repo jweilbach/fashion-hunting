@@ -23,4 +23,4 @@ ENV PYTHONPATH=/app/backend
 WORKDIR /app/backend
 
 # Run Celery worker
-CMD ["celery", "-A", "celery_app.celery:celery_app", "worker", "--loglevel=info"]
+CMD ["celery", "-A", "celery_app.celery:app", "worker", "--loglevel=info"]
