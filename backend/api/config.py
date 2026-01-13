@@ -52,14 +52,16 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
-    # CORS - handle after initialization
-    ALLOWED_ORIGINS: list = []
+    # CORS - stored as comma-separated string, converted to list via property
+    ALLOWED_ORIGINS_RAW: str = "http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:8501"
 
-    @model_validator(mode='after')
-    def set_allowed_origins(self):
-        origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:8501")
-        self.ALLOWED_ORIGINS = [origin.strip() for origin in origins_str.split(",")]
-        return self
+    @property
+    def ALLOWED_ORIGINS(self) -> list:
+        """Parse comma-separated origins string into list. Supports '*' for all origins."""
+        origins = self.ALLOWED_ORIGINS_RAW.strip()
+        if origins == "*":
+            return ["*"]
+        return [origin.strip() for origin in origins.split(",") if origin.strip()]
 
     # OpenAI
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
