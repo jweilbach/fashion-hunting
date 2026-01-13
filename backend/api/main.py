@@ -76,7 +76,8 @@ async def health_check():
         r = redis.Redis(
             host=settings.REDIS_HOST,
             port=settings.REDIS_PORT,
-            db=settings.REDIS_DB
+            db=settings.REDIS_DB,
+            password=settings.REDIS_PASSWORD if settings.REDIS_PASSWORD else None
         )
         r.ping()
         redis_status = "healthy"

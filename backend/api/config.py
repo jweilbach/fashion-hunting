@@ -37,9 +37,12 @@ class Settings(BaseSettings):
     REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
     REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
     REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
+    REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "")
 
     @property
     def REDIS_URL(self) -> str:
+        if self.REDIS_PASSWORD:
+            return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     # API Configuration
@@ -53,7 +56,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
     # CORS - stored as comma-separated string, converted to list via property
-    ALLOWED_ORIGINS_RAW: str = "http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:8501"
+    ALLOWED_ORIGINS_RAW: str = os.getenv("ALLOWED_ORIGINS_RAW", "*")
 
     @property
     def ALLOWED_ORIGINS(self) -> list:
