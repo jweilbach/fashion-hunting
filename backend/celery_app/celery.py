@@ -92,11 +92,13 @@ def setup_celery_logger(**kwargs):
     root_logger.handlers.clear()
     root_logger.setLevel(logging.INFO)
 
-    # File handler for persistent logs
-    log_file = Path(__file__).parent.parent / "logs" / "celery_worker.log"
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT))
-    root_logger.addHandler(file_handler)
+    # File handler for persistent logs (only if directory exists)
+    log_dir = Path(__file__).parent.parent / "logs"
+    if log_dir.exists():
+        log_file = log_dir / "celery_worker.log"
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT))
+        root_logger.addHandler(file_handler)
 
     # Console handler for real-time output
     # Use sys.__stdout__ to avoid Celery's redirected stdout
