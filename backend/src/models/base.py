@@ -2,8 +2,9 @@
 Base SQLAlchemy configuration and session management
 """
 import os
+from pathlib import Path
 from contextlib import contextmanager
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from dotenv import load_dotenv
@@ -71,9 +72,50 @@ def get_db():
 
 def init_db():
     """
-    Initialize database (create all tables)
-    Note: Use migrations in production, this is for development only
+    Initialize database by running the full schema.sql file.
+    This creates all tables, views, triggers, functions, and indexes.
+    Only runs if the 'tenants' table doesn't exist (first-time setup).
     """
-    # Import all models to ensure they're registered with Base.metadata
-    from . import tenant, report, feed, job, brand, user, analytics, audit
-    Base.metadata.create_all(bind=engine)
+    # Check if database is already initialized by looking for the tenants table
+    with engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'tenants')"
+        ))
+        tables_exist = result.scalar()
+
+    if tables_exist:
+        print("✅ Database already initialized, skipping schema creation")
+        return
+
+    # Find schema.sql relative to this file
+    # backend/src/models/base.py -> backend/../database/schema.sql
+    schema_paths = [
+        Path(__file__).parent.parent.parent.parent / "database" / "schema.sql",  # From backend/src/models
+        Path("/app/database/schema.sql"),  # Docker path
+    ]
+
+    schema_path = None
+    for path in schema_paths:
+        if path.exists():
+            schema_path = path
+            break
+
+    if schema_path is None:
+        # Fallback to SQLAlchemy create_all if schema.sql not found
+        print("⚠️ schema.sql not found, falling back to SQLAlchemy create_all")
+        from . import tenant, report, feed, job, brand, user, analytics, audit
+        Base.metadata.create_all(bind=engine)
+        return
+
+    # Read and execute the schema
+    print(f"📄 Loading schema from {schema_path}")
+    schema_sql = schema_path.read_text()
+
+    # Execute the schema
+    with engine.connect() as conn:
+        # Execute the entire schema as one transaction
+        # PostgreSQL can handle multiple statements in one execute
+        conn.execute(text(schema_sql))
+        conn.commit()
+
+    print("✅ Schema executed successfully - all tables, views, triggers, and functions created")
