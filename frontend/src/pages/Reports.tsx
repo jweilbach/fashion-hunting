@@ -46,6 +46,7 @@ import {
   RssFeed as RssIcon,
   Download as DownloadIcon,
   ViewList as ViewAllIcon,
+  AutoAwesome as NewIcon,
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { reportsApi, type ReportsQueryParams } from '../api/reports';
@@ -72,6 +73,7 @@ const Reports: React.FC = () => {
   const [sentimentFilter, setSentimentFilter] = useState<string>('');
   const [brandFilter, setBrandFilter] = useState<string>('');
   const [providerFilter, setProviderFilter] = useState<string>('');
+  const [dateFilter, setDateFilter] = useState<string>('all'); // all, today, week, month
   const [page, setPage] = useState(1);
   const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
 
@@ -84,16 +86,40 @@ const Reports: React.FC = () => {
   // If viewing provider-level, use the provider from URL
   const effectiveProviderId = provider?.id || (providerFilter || undefined);
 
+  // Calculate date range based on filter
+  const getDateRange = (): { start_date?: string; end_date?: string } => {
+    if (dateFilter === 'all') return {};
+
+    const now = new Date();
+    let startDate: Date;
+
+    if (dateFilter === 'today') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (dateFilter === 'week') {
+      startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else if (dateFilter === 'month') {
+      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    } else {
+      return {};
+    }
+
+    return { start_date: startDate.toISOString() };
+  };
+
   // Build query params
-  const queryParams: ReportsQueryParams = useMemo(() => ({
-    provider: effectiveProviderId,
-    source_type: category?.sourceType,
-    sentiment: sentimentFilter || undefined,
-    brand: brandFilter || undefined,
-    search: searchQuery || undefined,
-    skip: (page - 1) * ITEMS_PER_PAGE,
-    limit: ITEMS_PER_PAGE,
-  }), [effectiveProviderId, category?.sourceType, sentimentFilter, brandFilter, searchQuery, page]);
+  const queryParams: ReportsQueryParams = useMemo(() => {
+    const dateRange = getDateRange();
+    return {
+      provider: effectiveProviderId,
+      source_type: category?.sourceType,
+      sentiment: sentimentFilter || undefined,
+      brand: brandFilter || undefined,
+      search: searchQuery || undefined,
+      start_date: dateRange.start_date,
+      skip: (page - 1) * ITEMS_PER_PAGE,
+      limit: ITEMS_PER_PAGE,
+    };
+  }, [effectiveProviderId, category?.sourceType, sentimentFilter, brandFilter, searchQuery, dateFilter, page]);
 
   // Fetch reports - enabled when we have a category
   const { data: reportsData, isLoading, error } = useQuery({
@@ -447,6 +473,24 @@ const Reports: React.FC = () => {
               ))}
             </Select>
           </FormControl>
+
+          {/* Date Range Filter */}
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Date Range</InputLabel>
+            <Select
+              value={dateFilter}
+              label="Date Range"
+              onChange={(e) => {
+                setDateFilter(e.target.value);
+                setPage(1);
+              }}
+            >
+              <MenuItem value="all">All Time</MenuItem>
+              <MenuItem value="today">Today</MenuItem>
+              <MenuItem value="week">Last 7 Days</MenuItem>
+              <MenuItem value="month">Last 30 Days</MenuItem>
+            </Select>
+          </FormControl>
         </Box>
       </Paper>
 
@@ -556,20 +600,40 @@ const Reports: React.FC = () => {
                         {/* Content */}
                         <Box flex={1} minWidth={0}>
                           {/* Title */}
-                          <Typography
-                            variant="h6"
-                            sx={{
-                              fontWeight: 600,
-                              mb: 1,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              display: '-webkit-box',
-                              WebkitLineClamp: isExpanded ? 'unset' : 2,
-                              WebkitBoxOrient: 'vertical',
-                            }}
-                          >
-                            {report.title}
-                          </Typography>
+                          <Box display="flex" alignItems="flex-start" gap={1}>
+                            <Typography
+                              variant="h6"
+                              sx={{
+                                fontWeight: 600,
+                                mb: 1,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                display: '-webkit-box',
+                                WebkitLineClamp: isExpanded ? 'unset' : 2,
+                                WebkitBoxOrient: 'vertical',
+                              }}
+                            >
+                              {report.title}
+                            </Typography>
+                            {report.is_new && (
+                              <Chip
+                                icon={<NewIcon sx={{ fontSize: 14 }} />}
+                                label="New!"
+                                size="small"
+                                sx={{
+                                  background: `linear-gradient(135deg, ${theme.palette.warning.main}, ${theme.palette.warning.light})`,
+                                  color: theme.palette.warning.contrastText,
+                                  fontWeight: 600,
+                                  fontSize: '0.7rem',
+                                  height: 22,
+                                  '& .MuiChip-icon': {
+                                    color: theme.palette.warning.contrastText,
+                                  },
+                                  flexShrink: 0,
+                                }}
+                              />
+                            )}
+                          </Box>
 
                           {/* Meta Info */}
                           <Stack direction="row" spacing={2} mb={1.5} flexWrap="wrap" useFlexGap>

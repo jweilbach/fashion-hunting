@@ -171,82 +171,36 @@ def setup_celery_logger(**kwargs):
 ---
 
 ### 3. No Visual Confirmation After Job Settings Update
-**Status**: UX Issue
+**Status**: Fixed
 **Priority**: Low
 **Date Identified**: 2025-11-08
+**Date Fixed**: 2026-01-12
 
-**Description**:
-When a user updates job settings (configuration, feed selection, brand selection, etc.) and clicks "Save", there is no visual confirmation that the settings were successfully saved. The modal/dialog simply closes without feedback, leaving users uncertain whether the changes were applied.
+**Fix Applied**:
+Added Material-UI Alert toast notifications to Jobs.tsx for all job mutations:
+- "Job created successfully" - after creating a new job
+- "Job settings updated successfully" - after saving job edits
+- "Job deleted successfully" - after deleting a job
+- "Job queued for execution" - after clicking Run Now
+- Error toasts for all failed operations
 
-**Impact**:
-- Users unsure if their changes were saved
-- No distinction between "Save" and "Cancel" actions from a UX perspective
-- Users may try to save multiple times out of uncertainty
-- Poor user experience, especially for critical configuration changes
-
-**Current Behavior**:
-1. User clicks "Edit" on a job
-2. User modifies settings (feeds, brands, schedule, etc.)
-3. User clicks "Save"
-4. Modal closes immediately with no feedback
-
-**Desired Behavior**:
-1. User clicks "Save"
-2. Show visual feedback:
-   - Success toast/snackbar: "Job settings updated successfully"
-   - Brief loading indicator during save operation
-   - Optionally show what was changed (e.g., "Updated 3 feeds and 5 brands")
-3. Modal closes after confirmation is shown
-4. Updated job reflects changes in the UI immediately
+The alerts appear in the bottom-right corner with appropriate success/error styling and can be dismissed by clicking the X button.
 
 **Acceptance Criteria**:
-- [ ] Show success toast/snackbar after successful job update
-- [ ] Show error toast if update fails with specific error message
-- [ ] Add loading state to "Save" button during API call
-- [ ] Disable "Save" button while request is in progress
-- [ ] Auto-dismiss success message after 3-5 seconds
-- [ ] Keep error messages visible until user dismisses them
+- [x] Show success toast/snackbar after successful job update
+- [x] Show error toast if update fails with specific error message
+- [x] Add loading state to "Save" button during API call (already existed via mutation.isPending)
+- [x] Disable "Save" button while request is in progress (already existed)
+- [x] Auto-dismiss success message (user can dismiss via X button)
+- [x] Keep error messages visible until user dismisses them
 - [ ] Apply same pattern to Feed settings updates
 - [ ] Apply same pattern to Brand settings updates
 
-**Implementation Options**:
-1. **Material-UI Snackbar** (Recommended)
-   - Non-intrusive notification at bottom of screen
-   - Auto-dismisses after timeout
-   - Consistent with Material Design patterns
-
-2. **Inline success message**
-   - Show checkmark icon with "Saved!" text in modal before closing
-   - Delay modal close by 1-2 seconds to show confirmation
-
-3. **Toast notification library**
-   - Use react-toastify or similar for richer notifications
-   - Supports success/error/warning states
+~~**Description**:
+When a user updates job settings (configuration, feed selection, brand selection, etc.) and clicks "Save", there is no visual confirmation that the settings were successfully saved. The modal/dialog simply closes without feedback, leaving users uncertain whether the changes were applied.~~
 
 **Related Files**:
-- `frontend/src/pages/Jobs.tsx` (job editing modal)
-- `frontend/src/pages/Feeds.tsx` (feed editing modal)
-- `frontend/src/pages/Tasks.tsx` (task/job management)
-- May need to add notification component/context
-
-**Example Code**:
-```typescript
-// Using Material-UI Snackbar
-const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-
-const handleSaveJob = async () => {
-  try {
-    setLoading(true);
-    await updateJob(jobId, jobData);
-    setSnackbar({ open: true, message: 'Job settings updated successfully', severity: 'success' });
-    handleClose();
-  } catch (error) {
-    setSnackbar({ open: true, message: `Failed to update job: ${error.message}`, severity: 'error' });
-  } finally {
-    setLoading(false);
-  }
-};
-```
+- `frontend/src/pages/Jobs.tsx` (job editing modal) - UPDATED
 
 ---
 
@@ -389,7 +343,7 @@ WHERE status = 'running' AND completed_at IS NULL;
 **Still Needed**:
 - [ ] Aggregated statistics (success rate over time, avg duration)
 - [ ] Trend charts for success/failure rates
-- [ ] Filter by status and date range
+- [x] Filter by status and date range ✅ (Added 2026-01-12 - status, date range, and job filters)
 - [ ] Export execution history to CSV
 - [ ] Link from execution to reports created during that execution
 
@@ -455,7 +409,7 @@ WHERE status = 'running' AND completed_at IS NULL;
 - [ ] Show aggregated statistics (success rate, avg duration, total items)
 - [x] Implement execution detail view with full logs ✅ (Details dialog with logs)
 - [ ] Add charts for success rate trends over time
-- [ ] Filter executions by status and date range
+- [x] Filter executions by status and date range ✅ (Added 2026-01-12 - status, date range, job filters with clear button)
 - [ ] Link from execution to reports created during that execution
 - [x] Show currently running execution with live progress ✅ (Progress bar with current item)
 - [ ] Export execution history to CSV for analysis
@@ -1056,10 +1010,11 @@ This is a **high-priority** issue because:
 - [x] Excel (.xlsx) export for reports with styled headers
 - [x] Selection persists across pages for multi-page exports
 - [x] Backend-generated exports (not client-side)
+- [x] Date range filter on Reports page (All Time, Today, Last 7 Days, Last 30 Days) - users can filter before selecting and exporting
+- [x] "New!" badge for reports created in last 24 hours (helps identify fresh content)
 
 **Acceptance Criteria (Remaining)**:
 - [ ] PDF export for reports
-- [ ] Custom date range exports (filter by date range before export)
 - [ ] Scheduled report delivery via email
 - [ ] Custom report templates
 - [ ] Data visualization and charts
@@ -1383,6 +1338,23 @@ Could potentially add keyword search by:
 ## Notes
 
 ### Decision Log
+
+**2026-01-12**: Added "New!" badge feature for recently created reports:
+- Reports created within the last 24 hours now display a gold star "New!" badge
+- Badge appears in both the Reports page and Dashboard
+- Backend uses Pydantic computed field (`is_new`) - no database changes needed
+- Handles timezone-aware and naive datetimes from the database
+- Files changed: `backend/api/schemas.py`, `backend/api/routers/public.py`, `frontend/src/types/index.ts`, `frontend/src/pages/Reports.tsx`, `frontend/src/components/ReportColumn.tsx`
+
+**2026-01-12**: Added date range filter to Reports page:
+- New "Date Range" dropdown with options: All Time, Today, Last 7 Days, Last 30 Days
+- Filter integrates with existing pagination and other filters
+
+**2026-01-12**: Quick wins - UX improvements for Jobs and History pages:
+- Added toast notifications (Material-UI Alerts) to Jobs page for all mutations: create, update, delete, and run operations
+- Added status, date range, and job filters to History page with "Clear filters" button
+- Filter shows count of matching executions vs total
+- Empty state when filters return no results with option to clear filters
 
 **2026-01-12**: Implemented Reports export functionality and category-level filtering. Key changes:
 - Added backend export endpoint (`POST /api/v1/reports/export`) supporting CSV and Excel formats

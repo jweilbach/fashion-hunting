@@ -859,6 +859,74 @@ const Jobs: React.FC = () => {
       </Dialog>
 
       {/* Success/Error Alerts */}
+      {createMutation.isSuccess && (
+        <Alert
+          severity="success"
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            boxShadow: 3,
+            borderRadius: 2,
+            zIndex: 1300,
+          }}
+          onClose={() => createMutation.reset()}
+        >
+          Job created successfully
+        </Alert>
+      )}
+
+      {createMutation.isError && (
+        <Alert
+          severity="error"
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            boxShadow: 3,
+            borderRadius: 2,
+            zIndex: 1300,
+          }}
+          onClose={() => createMutation.reset()}
+        >
+          Failed to create job. Please try again.
+        </Alert>
+      )}
+
+      {updateMutation.isSuccess && (
+        <Alert
+          severity="success"
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            boxShadow: 3,
+            borderRadius: 2,
+            zIndex: 1300,
+          }}
+          onClose={() => updateMutation.reset()}
+        >
+          Job settings updated successfully
+        </Alert>
+      )}
+
+      {updateMutation.isError && (
+        <Alert
+          severity="error"
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            boxShadow: 3,
+            borderRadius: 2,
+            zIndex: 1300,
+          }}
+          onClose={() => updateMutation.reset()}
+        >
+          Failed to update job. Please try again.
+        </Alert>
+      )}
+
       {runMutation.isSuccess && (
         <Alert
           severity="success"
@@ -868,6 +936,7 @@ const Jobs: React.FC = () => {
             right: 24,
             boxShadow: 3,
             borderRadius: 2,
+            zIndex: 1300,
           }}
           onClose={() => runMutation.reset()}
         >
@@ -884,12 +953,47 @@ const Jobs: React.FC = () => {
             right: 24,
             boxShadow: 3,
             borderRadius: 2,
+            zIndex: 1300,
           }}
           onClose={() => runMutation.reset()}
         >
           {runMutation.error?.message?.includes('already running') || runMutation.error?.message?.includes('409')
             ? 'Job is already running. Please wait for the current execution to complete.'
             : 'Failed to run job. Please try again.'}
+        </Alert>
+      )}
+
+      {deleteMutation.isSuccess && (
+        <Alert
+          severity="success"
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            boxShadow: 3,
+            borderRadius: 2,
+            zIndex: 1300,
+          }}
+          onClose={() => deleteMutation.reset()}
+        >
+          Job deleted successfully
+        </Alert>
+      )}
+
+      {deleteMutation.isError && (
+        <Alert
+          severity="error"
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            boxShadow: 3,
+            borderRadius: 2,
+            zIndex: 1300,
+          }}
+          onClose={() => deleteMutation.reset()}
+        >
+          Failed to delete job. Please try again.
         </Alert>
       )}
     </Box>

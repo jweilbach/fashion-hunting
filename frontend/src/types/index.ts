@@ -21,6 +21,7 @@ export interface Report {
   error_message?: string;
   created_at: string;
   updated_at: string;
+  is_new?: boolean; // Computed by backend: true if created in last 24 hours
 }
 
 export interface Brand {

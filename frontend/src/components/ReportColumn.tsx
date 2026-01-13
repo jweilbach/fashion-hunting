@@ -16,7 +16,7 @@ import {
   alpha,
   useTheme,
 } from '@mui/material';
-import { ExpandMore as ExpandMoreIcon, AccessTime as TimeIcon } from '@mui/icons-material';
+import { ExpandMore as ExpandMoreIcon, AccessTime as TimeIcon, AutoAwesome as NewIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import type { Report } from '../types';
 
@@ -136,6 +136,23 @@ export const ReportColumn: React.FC<ReportColumnProps> = ({
                       />
                       <Box flex={1}>
                         <Box display="flex" alignItems="center" gap={1} mb={1} flexWrap="wrap">
+                          {report.is_new && (
+                            <Chip
+                              icon={<NewIcon sx={{ fontSize: 14 }} />}
+                              label="New!"
+                              size="small"
+                              sx={{
+                                background: `linear-gradient(135deg, ${theme.palette.warning.main}, ${theme.palette.warning.light})`,
+                                color: theme.palette.warning.contrastText,
+                                fontWeight: 600,
+                                fontSize: '0.7rem',
+                                height: 22,
+                                '& .MuiChip-icon': {
+                                  color: theme.palette.warning.contrastText,
+                                },
+                              }}
+                            />
+                          )}
                           <Link
                             href={report.link}
                             target="_blank"

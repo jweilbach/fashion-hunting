@@ -21,6 +21,10 @@ import {
   LinearProgress,
   Collapse,
   IconButton,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import {
   CheckCircle as SuccessIcon,
@@ -31,6 +35,7 @@ import {
   History as HistoryIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
+  FilterList as FilterIcon,
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { jobsApi, type JobExecution, type ScheduledJob } from '../api/jobs';
@@ -53,6 +58,11 @@ const History: React.FC = () => {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
 
+  // Filter state
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [dateFilter, setDateFilter] = useState<string>('all'); // all, today, week, month
+  const [jobFilter, setJobFilter] = useState<string>('');
+
   const { data: executions, isLoading, error } = useQuery({
     queryKey: ['executions'],
     queryFn: () => jobsApi.getAllExecutions(),
@@ -73,13 +83,49 @@ const History: React.FC = () => {
     return job?.config?.name || 'Unknown Job';
   };
 
+  // Filter executions based on filters
+  const filteredExecutions = useMemo(() => {
+    if (!executions) return [];
+
+    return executions.filter((execution: JobExecution) => {
+      // Status filter
+      if (statusFilter && execution.status !== statusFilter) {
+        return false;
+      }
+
+      // Job filter
+      if (jobFilter && execution.job_id !== jobFilter) {
+        return false;
+      }
+
+      // Date filter
+      if (dateFilter !== 'all') {
+        const execDate = new Date(execution.started_at);
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        if (dateFilter === 'today') {
+          if (execDate < startOfToday) return false;
+        } else if (dateFilter === 'week') {
+          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          if (execDate < weekAgo) return false;
+        } else if (dateFilter === 'month') {
+          const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          if (execDate < monthAgo) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [executions, statusFilter, jobFilter, dateFilter]);
+
   // Group executions by job
   const groupedExecutions = useMemo(() => {
-    if (!executions || !jobs) return [];
+    if (!filteredExecutions || !jobs) return [];
 
     const grouped = new Map<string, GroupedExecutions>();
 
-    executions.forEach((execution: JobExecution) => {
+    filteredExecutions.forEach((execution: JobExecution) => {
       const jobId = execution.job_id;
 
       if (!grouped.has(jobId)) {
@@ -106,7 +152,7 @@ const History: React.FC = () => {
     return Array.from(grouped.values()).sort((a, b) =>
       new Date(b.latestExecution.started_at).getTime() - new Date(a.latestExecution.started_at).getTime()
     );
-  }, [executions, jobs]);
+  }, [filteredExecutions, jobs]);
 
   const toggleJobExpansion = (jobId: string) => {
     setExpandedJobs(prev => {
@@ -231,6 +277,97 @@ const History: React.FC = () => {
         </Typography>
       </MotionBox>
 
+      {/* Filters */}
+      <Paper
+        sx={{
+          p: 3,
+          mb: 3,
+          borderRadius: 2,
+          background: alpha(theme.palette.background.paper, 0.8),
+        }}
+      >
+        <Box display="flex" alignItems="center" gap={1} mb={2}>
+          <FilterIcon color="action" />
+          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+            Filters
+          </Typography>
+          {(statusFilter || dateFilter !== 'all' || jobFilter) && (
+            <Chip
+              label="Clear filters"
+              size="small"
+              onClick={() => {
+                setStatusFilter('');
+                setDateFilter('all');
+                setJobFilter('');
+              }}
+              onDelete={() => {
+                setStatusFilter('');
+                setDateFilter('all');
+                setJobFilter('');
+              }}
+              sx={{ ml: 'auto' }}
+            />
+          )}
+        </Box>
+
+        <Box display="flex" gap={2} flexWrap="wrap">
+          {/* Status Filter */}
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Status</InputLabel>
+            <Select
+              value={statusFilter}
+              label="Status"
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <MenuItem value="">All Statuses</MenuItem>
+              <MenuItem value="success">Success</MenuItem>
+              <MenuItem value="failed">Failed</MenuItem>
+              <MenuItem value="running">Running</MenuItem>
+              <MenuItem value="partial">Partial</MenuItem>
+            </Select>
+          </FormControl>
+
+          {/* Date Filter */}
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Date Range</InputLabel>
+            <Select
+              value={dateFilter}
+              label="Date Range"
+              onChange={(e) => setDateFilter(e.target.value)}
+            >
+              <MenuItem value="all">All Time</MenuItem>
+              <MenuItem value="today">Today</MenuItem>
+              <MenuItem value="week">Last 7 Days</MenuItem>
+              <MenuItem value="month">Last 30 Days</MenuItem>
+            </Select>
+          </FormControl>
+
+          {/* Job Filter */}
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel>Job</InputLabel>
+            <Select
+              value={jobFilter}
+              label="Job"
+              onChange={(e) => setJobFilter(e.target.value)}
+            >
+              <MenuItem value="">All Jobs</MenuItem>
+              {jobs?.map((job: ScheduledJob) => (
+                <MenuItem key={job.id} value={job.id}>
+                  {job.config?.name || 'Unnamed Job'}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
+
+        {/* Filter Results Count */}
+        {executions && executions.length > 0 && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            Showing {filteredExecutions.length} of {executions.length} executions
+          </Typography>
+        )}
+      </Paper>
+
       {/* Grouped Executions */}
       {(!executions || executions.length === 0) ? (
         <Card sx={{ p: 6, textAlign: 'center' }}>
@@ -241,6 +378,27 @@ const History: React.FC = () => {
           <Typography variant="body2" color="text.secondary">
             Run a job to see execution results here
           </Typography>
+        </Card>
+      ) : filteredExecutions.length === 0 ? (
+        <Card sx={{ p: 6, textAlign: 'center' }}>
+          <FilterIcon sx={{ fontSize: 64, color: theme.palette.text.secondary, mb: 2 }} />
+          <Typography variant="h6" color="text.secondary" gutterBottom>
+            No matching executions
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Try adjusting your filters to see more results
+          </Typography>
+          <Button
+            variant="outlined"
+            sx={{ mt: 2 }}
+            onClick={() => {
+              setStatusFilter('');
+              setDateFilter('all');
+              setJobFilter('');
+            }}
+          >
+            Clear Filters
+          </Button>
         </Card>
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

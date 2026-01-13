@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from typing import List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import sys
 from pathlib import Path
 
@@ -115,6 +115,16 @@ async def get_recent_reports(
     # Get paginated reports
     reports = query.order_by(desc(Report.timestamp)).offset(skip).limit(limit).all()
 
+    def is_new(created_at: datetime) -> bool:
+        """Check if report was created in last 24 hours"""
+        if created_at is None:
+            return False
+        now = datetime.now(timezone.utc)
+        created = created_at
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        return now - created < timedelta(hours=24)
+
     return {
         "total": total,
         "items": [
@@ -130,7 +140,8 @@ async def get_recent_reports(
                 "sentiment": report.sentiment,
                 "link": report.link,
                 "est_reach": report.est_reach or 0,
-                "created_at": report.created_at.isoformat() if report.created_at else None
+                "created_at": report.created_at.isoformat() if report.created_at else None,
+                "is_new": is_new(report.created_at)
             }
             for report in reports
         ]

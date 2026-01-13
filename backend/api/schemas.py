@@ -2,8 +2,8 @@
 Pydantic schemas for API request/response validation
 """
 from typing import List, Optional, Dict, Any
-from datetime import datetime
-from pydantic import BaseModel, Field, EmailStr, ConfigDict
+from datetime import datetime, timedelta, timezone
+from pydantic import BaseModel, Field, EmailStr, ConfigDict, computed_field
 from uuid import UUID
 
 
@@ -146,6 +146,17 @@ class Report(ReportBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @computed_field
+    @property
+    def is_new(self) -> bool:
+        """Returns True if the report was created in the last 24 hours."""
+        now = datetime.now(timezone.utc)
+        created = self.created_at
+        # Handle both timezone-aware and naive datetimes
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        return now - created < timedelta(hours=24)
 
 
 # ============================================================================
