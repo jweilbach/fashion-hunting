@@ -74,4 +74,6 @@ def init_db():
     Initialize database (create all tables)
     Note: Use migrations in production, this is for development only
     """
+    # Import all models to ensure they're registered with Base.metadata
+    from . import tenant, report, feed, job, brand, user, analytics, audit
     Base.metadata.create_all(bind=engine)
