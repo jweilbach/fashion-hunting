@@ -78,7 +78,7 @@ class YouTubeProcessor(BaseContentProcessor):
         stats = item.get('stats', {})
         est_reach = item.get('est_reach', 0)
 
-        logger.info(f"Processing YouTube video from {channel_name}")
+        logger.info(f"Processing YouTube video from channel {channel_name}")
         logger.info(f"Title: {title[:100]}...")
         logger.info(f"Description length: {len(description)} chars")
         logger.info(f"Description preview: {description[:200]}...")
