@@ -50,8 +50,8 @@ const QuickSearchWidget: React.FC<QuickSearchWidgetProps> = ({ onSearchComplete 
   const [progress, setProgress] = useState<ProgressState | null>(null);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-  const [taskId, setTaskId] = useState<string | null>(null);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [, setTaskId] = useState<string | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Provider type options
   const providerOptions = [

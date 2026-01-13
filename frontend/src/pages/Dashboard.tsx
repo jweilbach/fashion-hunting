@@ -7,33 +7,25 @@ import {
   CircularProgress,
   Alert,
   Chip,
-  Paper,
   List,
   ListItem,
   ListItemText,
   Button,
-  Collapse,
   Select,
   MenuItem,
   FormControl,
   InputLabel,
   Pagination,
-  Checkbox,
-  Link,
   Avatar,
-  Stack,
-  Divider,
   alpha,
   useTheme,
 } from '@mui/material';
 import {
-  ExpandMore as ExpandMoreIcon,
   Delete as DeleteIcon,
   TrendingUp as TrendingUpIcon,
   Assessment as AssessmentIcon,
   Business as BusinessIcon,
   RssFeed as FeedIcon,
-  AccessTime as TimeIcon,
   Instagram as InstagramIcon,
   Article as ArticleIcon,
 } from '@mui/icons-material';
@@ -138,15 +130,6 @@ const Dashboard: React.FC = () => {
       }
       return newSet;
     });
-  };
-
-  const toggleSelectAll = () => {
-    const allReports = [...(socialReportsData?.items || []), ...(digitalReportsData?.items || [])];
-    if (selectedReports.size === allReports.length && allReports.length > 0) {
-      setSelectedReports(new Set());
-    } else {
-      setSelectedReports(new Set(allReports.map(r => r.id)));
-    }
   };
 
   const deleteMutation = useMutation({
