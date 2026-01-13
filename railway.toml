@@ -1,11 +1,13 @@
 # Railway Configuration
 # This project requires multiple services - deploy each as a separate Railway service
+# Health checks are configured per-service in Railway dashboard (not here)
+# - Backend: /health
+# - Frontend: none (static files)
+# - Celery: none (worker process)
 
 [build]
 builder = "dockerfile"
 
 [deploy]
-healthcheckPath = "/health"
-healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
