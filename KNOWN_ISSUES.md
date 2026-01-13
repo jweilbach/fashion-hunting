@@ -340,10 +340,12 @@ WHERE status = 'running' AND completed_at IS NULL;
 - ✅ Auto-refresh while jobs are running
 - ✅ Renamed old "Reports" page to "History" for clarity
 
-**Still Needed**:
+**Still Needed** (Post-MVP enhancements):
+- [x] Filter by status and date range ✅ (Added 2026-01-12 - status, date range, and job filters)
+
+**Future Enhancements** (Deferred from MVP):
 - [ ] Aggregated statistics (success rate over time, avg duration)
 - [ ] Trend charts for success/failure rates
-- [x] Filter by status and date range ✅ (Added 2026-01-12 - status, date range, and job filters)
 - [ ] Export execution history to CSV
 - [ ] Link from execution to reports created during that execution
 
@@ -403,15 +405,17 @@ WHERE status = 'running' AND completed_at IS NULL;
 - Search by error message
 - Sort by duration, items processed, date
 
-**Acceptance Criteria**:
+**Acceptance Criteria** (MVP - Complete):
 - [x] Add "Execution History" tab/page for each job ✅ (History page with grouped executions)
 - [x] Display table of recent executions (last 50-100) ✅ (All executions shown, grouped by job)
-- [ ] Show aggregated statistics (success rate, avg duration, total items)
 - [x] Implement execution detail view with full logs ✅ (Details dialog with logs)
-- [ ] Add charts for success rate trends over time
 - [x] Filter executions by status and date range ✅ (Added 2026-01-12 - status, date range, job filters with clear button)
-- [ ] Link from execution to reports created during that execution
 - [x] Show currently running execution with live progress ✅ (Progress bar with current item)
+
+**Acceptance Criteria** (Post-MVP):
+- [ ] Show aggregated statistics (success rate, avg duration, total items)
+- [ ] Add charts for success rate trends over time
+- [ ] Link from execution to reports created during that execution
 - [ ] Export execution history to CSV for analysis
 
 **API Endpoints Needed**:
@@ -945,13 +949,16 @@ This is a **high-priority** issue because:
 **Description**: WebSocket/SSE support for live job progress in UI
 **Dependencies**: None
 **Estimate**: 2-3 days
+**Status**: Deferred (Post-MVP) - Current polling-based refresh works well enough for MVP
 
-**Acceptance Criteria**:
+**Acceptance Criteria** (Post-MVP):
 - [ ] WebSocket endpoint for job progress
 - [ ] Frontend subscribes to job updates
 - [ ] Real-time progress bar updates
 - [ ] Live log streaming to UI
 - [ ] Completion notifications
+
+**Note**: Current implementation uses polling (auto-refresh every 5s when jobs running, 30s otherwise) which is sufficient for MVP.
 
 ---
 
@@ -2070,17 +2077,20 @@ Brands like Color Wow give products to influencers, and PR teams need to monitor
 ---
 
 ### 8. Export to Google Sheets/Docs
-**Priority**: Low (Easy Win)
+**Priority**: Low (Post-MVP)
 **Category**: Data Export
 **Estimate**: 1 day
+**Status**: Deferred - Basic Excel export available, direct Google integration is Post-MVP
 
 **Description**:
 Users want to export reports, brand mentions, and analytics to Google Sheets or Google Docs for sharing with clients and team collaboration.
 
-**Note**: Basic CSV/Excel export is now available (2026-01-12). Users can export to Excel and then upload to Google Sheets manually. This feature would add direct integration.
+**Note**: Basic CSV/Excel export is now available (2026-01-12). Users can export to Excel and then upload to Google Sheets manually. Direct Google Sheets/Docs integration deferred to Post-MVP.
 
-**Acceptance Criteria**:
+**Acceptance Criteria** (MVP - Complete):
 - [x] Export to Excel format (workaround: upload to Google Sheets) - COMPLETED 2026-01-12
+
+**Acceptance Criteria** (Post-MVP):
 - [ ] "Export to Google Sheets" button on reports page (direct integration)
 - [ ] "Export to Google Docs" for formatted reports
 - [ ] Configure which columns/fields to export
