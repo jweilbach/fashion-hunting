@@ -5,7 +5,7 @@ export interface Feed {
   tenant_id: string;
   provider: string; // RSS, TikTok, Instagram
   feed_type: string; // hashtag, keyword, user, rss_url
-  feed_value: string; // The actual URL, hashtag, username
+  feed_value: string; // The actual URL, hashtag, username etc
   label?: string;
   enabled: boolean;
   fetch_count: number;
