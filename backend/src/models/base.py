@@ -75,6 +75,7 @@ def init_db():
     Initialize database by running the full schema.sql file.
     This creates all tables, views, triggers, functions, and indexes.
     Only runs if the 'tenants' table doesn't exist (first-time setup).
+    After initial setup, also checks for any missing tables from new models.
     """
     # Check if database is already initialized by looking for the tenants table
     with engine.connect() as conn:
@@ -84,7 +85,9 @@ def init_db():
         tables_exist = result.scalar()
 
     if tables_exist:
-        print("✅ Database already initialized, skipping schema creation")
+        print("✅ Database already initialized, checking for new tables...")
+        # Check for any missing tables and create them
+        _create_missing_tables()
         return
 
     # Find schema.sql relative to this file
@@ -103,7 +106,7 @@ def init_db():
     if schema_path is None:
         # Fallback to SQLAlchemy create_all if schema.sql not found
         print("⚠️ schema.sql not found, falling back to SQLAlchemy create_all")
-        from . import tenant, report, feed, job, brand, user, analytics, audit
+        from . import tenant, report, feed, job, brand, user, analytics, audit, list
         Base.metadata.create_all(bind=engine)
         return
 
@@ -119,3 +122,40 @@ def init_db():
         conn.commit()
 
     print("✅ Schema executed successfully - all tables, views, triggers, and functions created")
+
+
+def _create_missing_tables():
+    """
+    Check for tables defined in SQLAlchemy models that don't exist in the database
+    and create them. This handles migrations for new features.
+    """
+    # Import all models to ensure they're registered with Base.metadata
+    from . import tenant, report, feed, job, brand, user, analytics, audit, list
+
+    # Get existing tables from database
+    with engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+        ))
+        existing_tables = {row[0] for row in result}
+
+    # Get tables defined in models
+    model_tables = set(Base.metadata.tables.keys())
+
+    # Find missing tables
+    missing_tables = model_tables - existing_tables
+
+    if not missing_tables:
+        print("✅ All model tables exist in database")
+        return
+
+    print(f"📦 Found {len(missing_tables)} missing table(s): {', '.join(missing_tables)}")
+
+    # Create only the missing tables
+    tables_to_create = [
+        Base.metadata.tables[table_name]
+        for table_name in missing_tables
+    ]
+
+    Base.metadata.create_all(bind=engine, tables=tables_to_create)
+    print(f"✅ Created missing tables: {', '.join(missing_tables)}")

@@ -45,6 +45,7 @@ class Tenant(Base):
     brand_configs = relationship("BrandConfig", back_populates="tenant", cascade="all, delete-orphan")
     users = relationship("User", back_populates="tenant", cascade="all, delete-orphan")
     provider_credentials = relationship("ProviderCredential", back_populates="tenant", cascade="all, delete-orphan")
+    lists = relationship("List", back_populates="tenant", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Tenant(slug='{self.slug}', name='{self.name}')>"

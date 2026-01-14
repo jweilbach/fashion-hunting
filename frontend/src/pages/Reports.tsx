@@ -27,6 +27,15 @@ import {
   Checkbox,
   Button,
   Menu,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -47,10 +56,13 @@ import {
   Download as DownloadIcon,
   ViewList as ViewAllIcon,
   AutoAwesome as NewIcon,
+  PlaylistAdd as AddToListIcon,
+  PlaylistAddCheck as ListsIcon,
 } from '@mui/icons-material';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { reportsApi, type ReportsQueryParams } from '../api/reports';
 import { brandsApi } from '../api/brands';
+import { listsApi } from '../api/lists';
 import { motion } from 'framer-motion';
 import type { Report } from '../types';
 import { getCategoryById, getProviderByRoute } from '../config/providers';
@@ -80,6 +92,13 @@ const Reports: React.FC = () => {
   // State for selection and export
   const [selectedReports, setSelectedReports] = useState<Set<string>>(new Set());
   const [exportMenuAnchor, setExportMenuAnchor] = useState<null | HTMLElement>(null);
+
+  // State for Add to List dialog
+  const [addToListDialogOpen, setAddToListDialogOpen] = useState(false);
+  const [selectedLists, setSelectedLists] = useState<Set<string>>(new Set());
+  const [isAddingToLists, setIsAddingToLists] = useState(false);
+
+  const queryClient = useQueryClient();
 
   // Determine the effective provider for filtering
   // If viewing category-level (no providerId), use the providerFilter dropdown
@@ -133,6 +152,47 @@ const Reports: React.FC = () => {
     queryKey: ['brands'],
     queryFn: () => brandsApi.getBrands(),
   });
+
+  // Fetch lists for "Add to List" functionality
+  const { data: listsData } = useQuery({
+    queryKey: ['lists', 'report'],
+    queryFn: () => listsApi.getLists('report'),
+  });
+
+  // Filter to only show report-type lists
+  const reportLists = listsData?.items || [];
+
+  const toggleListSelected = (listId: string) => {
+    setSelectedLists((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(listId)) {
+        newSet.delete(listId);
+      } else {
+        newSet.add(listId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleAddToLists = async () => {
+    if (selectedLists.size === 0 || selectedReports.size === 0) return;
+
+    setIsAddingToLists(true);
+    try {
+      await listsApi.addItemsToMultipleLists(
+        Array.from(selectedLists),
+        Array.from(selectedReports)
+      );
+      // Invalidate lists query to update item counts
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+      setAddToListDialogOpen(false);
+      setSelectedLists(new Set());
+    } catch (error) {
+      console.error('Failed to add to lists:', error);
+    } finally {
+      setIsAddingToLists(false);
+    }
+  };
 
   const toggleExpanded = (reportId: string) => {
     setExpandedReports(prev => {
@@ -361,7 +421,7 @@ const Reports: React.FC = () => {
             </Typography>
           </Box>
 
-          {/* Export Button */}
+          {/* Export and Add to List Buttons */}
           {selectedReports.size > 0 && (
             <Box display="flex" alignItems="center" gap={1}>
               <Typography variant="body2" color="text.secondary">
@@ -373,6 +433,14 @@ const Reports: React.FC = () => {
                 onClick={clearAllSelections}
               >
                 Clear All
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<AddToListIcon />}
+                onClick={() => setAddToListDialogOpen(true)}
+              >
+                Add to List
               </Button>
               <Button
                 variant="contained"
@@ -831,6 +899,73 @@ const Reports: React.FC = () => {
           )}
         </>
       )}
+
+      {/* Add to List Dialog */}
+      <Dialog
+        open={addToListDialogOpen}
+        onClose={() => {
+          setAddToListDialogOpen(false);
+          setSelectedLists(new Set());
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box display="flex" alignItems="center" gap={1}>
+            <AddToListIcon />
+            Add to List
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select one or more lists to add {selectedReports.size} report{selectedReports.size !== 1 ? 's' : ''} to:
+          </Typography>
+          {reportLists.length === 0 ? (
+            <Alert severity="info">
+              No lists available. Create a list first from the Lists page.
+            </Alert>
+          ) : (
+            <List sx={{ pt: 0 }}>
+              {reportLists.map((list) => (
+                <ListItem key={list.id} disablePadding>
+                  <ListItemButton onClick={() => toggleListSelected(list.id)}>
+                    <ListItemIcon>
+                      <Checkbox
+                        edge="start"
+                        checked={selectedLists.has(list.id)}
+                        tabIndex={-1}
+                        disableRipple
+                      />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={list.name}
+                      secondary={`${list.item_count} items${list.description ? ` • ${list.description}` : ''}`}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setAddToListDialogOpen(false);
+              setSelectedLists(new Set());
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleAddToLists}
+            disabled={selectedLists.size === 0 || isAddingToLists}
+            startIcon={isAddingToLists ? <CircularProgress size={16} color="inherit" /> : <ListsIcon />}
+          >
+            {isAddingToLists ? 'Adding...' : `Add to ${selectedLists.size} List${selectedLists.size !== 1 ? 's' : ''}`}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

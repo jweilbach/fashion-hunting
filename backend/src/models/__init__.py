@@ -10,6 +10,7 @@ from .brand import BrandConfig
 from .user import User
 from .analytics import AnalyticsCache
 from .audit import AuditLog
+from .list import List, ListItem
 
 __all__ = [
     'Base',
@@ -25,4 +26,6 @@ __all__ = [
     'User',
     'AnalyticsCache',
     'AuditLog',
+    'List',
+    'ListItem',
 ]

@@ -843,6 +843,108 @@ This is a **high-priority** issue because:
 
 ---
 
+## Recently Implemented Features
+
+### Lists Feature
+**Status**: Implemented
+**Date Completed**: 2025-01-13
+
+**Description**:
+A comprehensive Lists feature that allows users to organize and manage collections of reports. Users can create named lists, add reports to multiple lists at once, and export list contents.
+
+**Key Features**:
+- **Single type per list**: Each list contains only one object type (reports, contacts, or editors - future extensibility)
+- **Multi-tenant support**: All users within an organization can see and manage all lists
+- **Bulk operations**: Add multiple reports to multiple lists simultaneously
+- **Export functionality**: Export list contents to CSV or Excel format
+- **Cascade delete**: When reports are deleted, they are automatically removed from all lists
+
+**Database Schema**:
+```sql
+-- Lists table
+CREATE TABLE lists (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    list_type VARCHAR(50) NOT NULL,  -- 'report', 'contact', 'editor'
+    description TEXT,
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- List items table (generic item references)
+CREATE TABLE list_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    list_id UUID NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+    item_id UUID NOT NULL,  -- References report.id, contact.id, etc.
+    added_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    added_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(list_id, item_id)
+);
+```
+
+**API Endpoints** (`/api/v1/lists/`):
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | List all lists (with pagination) |
+| GET | `/{list_id}` | Get single list with items |
+| POST | `/` | Create new list |
+| PUT/PATCH | `/{list_id}` | Update list name/description |
+| DELETE | `/{list_id}` | Delete list and all items |
+| POST | `/{list_id}/items/` | Add single item to list |
+| POST | `/{list_id}/items/bulk/` | Add multiple items to list |
+| POST | `/bulk-add/` | Add items to multiple lists |
+| DELETE | `/{list_id}/items/{item_id}` | Remove item from list |
+| DELETE | `/{list_id}/items/bulk/` | Remove multiple items |
+| GET | `/containing/{item_id}` | Get lists containing item |
+| POST | `/{list_id}/export/` | Export list to CSV/Excel |
+
+**Frontend Components**:
+- **Lists Page** (`/lists`): View, create, edit, and delete lists
+- **List Detail Page** (`/lists/:listId`): View items in list, remove items, export
+- **Add to List Dialog**: On Reports page, select reports and add to one or more lists
+- **Sidebar Navigation**: Lists tab added below Reports section
+
+**Files Created/Modified**:
+
+*Backend:*
+- `database/schema.sql` - Added lists and list_items tables with triggers
+- `backend/src/models/list.py` - SQLAlchemy models for List and ListItem
+- `backend/src/models/tenant.py` - Added lists relationship
+- `backend/src/models/user.py` - Added created_lists and added_list_items relationships
+- `backend/src/models/__init__.py` - Export new models
+- `backend/src/repositories/list_repository.py` - Full CRUD operations
+- `backend/api/schemas.py` - Pydantic schemas for validation
+- `backend/api/routers/lists.py` - All API endpoints
+- `backend/api/main.py` - Router registration
+
+*Frontend:*
+- `frontend/src/types/index.ts` - TypeScript interfaces
+- `frontend/src/api/lists.ts` - API client
+- `frontend/src/pages/Lists.tsx` - Lists page component
+- `frontend/src/pages/ListDetail.tsx` - List detail page
+- `frontend/src/components/Layout.tsx` - Added Lists to sidebar
+- `frontend/src/App.tsx` - Added routes
+- `frontend/src/pages/Reports.tsx` - Added "Add to List" button and dialog
+
+**Usage**:
+1. Navigate to Reports page and select reports using checkboxes
+2. Click "Add to List" button (appears when reports are selected)
+3. Select one or more lists in the dialog
+4. Click "Add to X Lists" to add selected reports
+5. View lists from the Lists tab in sidebar
+6. Click a list to see its contents, remove items, or export
+
+**Future Enhancements**:
+- Support for contact and editor list types
+- List sharing permissions (private vs. shared)
+- List tagging and categorization
+- Smart lists with auto-population rules
+
+---
+
 ## Feature Backlog
 
 ### High Priority
@@ -945,7 +1047,51 @@ This is a **high-priority** issue because:
 
 ---
 
-#### 5. Real-time Job Progress Updates
+#### 5. Inline Create Options in Selection Dialogs
+**Description**: Allow creating new entities (lists, brands) directly from selection dialogs without leaving the current workflow
+**Priority**: Medium
+**Dependencies**: None
+**Date Requested**: 2026-01-13
+
+**Current Behavior**:
+- When adding reports to a list from the Reports page, user must go to Lists page first to create a new list
+- When creating a job and selecting brands, user must go to Brands page first to create a new brand
+
+**Desired Behavior**:
+- "Add to List" dialog on Reports page should have a "Create New List" option/button
+- Job creation/edit form should have a "Create New Brand" option when selecting brands
+
+**Affected Pages**:
+1. **Reports Page - Add to List Dialog**
+   - File: `frontend/src/pages/Reports.tsx`
+   - Dialog currently shows list of existing report-type lists
+   - Add a "Create New List" button that opens a mini-form or inline creation
+   - After creation, new list should appear in the selection and be pre-selected
+
+2. **Jobs Page - Brand Selection**
+   - File: `frontend/src/pages/Jobs.tsx`
+   - Brand dropdown/selection in job creation form
+   - Add a "Create New Brand" option that opens a mini-form
+   - After creation, new brand should be selected in the dropdown
+
+**User Benefits**:
+- Seamless workflow - no context switching to create supporting entities
+- Faster task completion
+- Reduces friction when setting up new configurations
+
+**Acceptance Criteria**:
+- [ ] "Add to List" dialog shows "Create New List" option
+- [ ] Mini-form for new list includes: name, description (type is auto-set to "report")
+- [ ] New list appears in selection after creation
+- [ ] Job form shows "Create New Brand" option in brand selection
+- [ ] Mini-form for new brand includes: name, aliases
+- [ ] New brand is auto-selected after creation
+- [ ] Loading states shown during creation
+- [ ] Error handling for failed creations
+
+---
+
+#### 6. Real-time Job Progress Updates
 **Description**: WebSocket/SSE support for live job progress in UI
 **Dependencies**: None
 **Estimate**: 2-3 days
@@ -962,7 +1108,7 @@ This is a **high-priority** issue because:
 
 ---
 
-#### 6. Brand Extraction Improvements
+#### 7. Brand Extraction Improvements
 **Description**: Enhanced brand detection with better accuracy
 **Dependencies**: None
 **Estimate**: 3-4 days
@@ -976,7 +1122,7 @@ This is a **high-priority** issue because:
 
 ---
 
-#### 7. Performance Optimization
+#### 8. Performance Optimization
 **Description**: Optimize database queries and API calls for faster job execution
 **Dependencies**: None
 **Estimate**: 2-3 days
@@ -992,7 +1138,7 @@ This is a **high-priority** issue because:
 
 ### Low Priority
 
-#### 8. Admin Dashboard Enhancements
+#### 9. Admin Dashboard Enhancements
 **Description**: Better admin tools for monitoring and management
 **Dependencies**: None
 **Estimate**: 3-5 days
@@ -1006,7 +1152,7 @@ This is a **high-priority** issue because:
 
 ---
 
-#### 9. Export & Reporting Features
+#### 10. Export & Reporting Features
 **Description**: Enhanced export capabilities and custom reports
 **Dependencies**: None
 **Estimate**: 2-3 days
@@ -1028,7 +1174,7 @@ This is a **high-priority** issue because:
 
 ---
 
-#### 10. Brand Contact Management & Outreach System
+#### 11. Brand Contact Management & Outreach System
 **Description**: Contact database for brand editors/reps with LinkedIn integration and AI-powered email drafting
 **Priority**: High (Business Critical)
 **Dependencies**: None
@@ -2417,4 +2563,4 @@ PR firms mention "divide and conquer" and "lead routing" - they need to assign a
 
 ---
 
-*Last Updated: 2025-11-19*
+*Last Updated: 2025-01-13*

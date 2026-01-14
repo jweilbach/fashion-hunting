@@ -363,6 +363,58 @@ CREATE INDEX idx_audit_logs_resource ON audit_logs(resource_type, resource_id);
 -- ALTER TABLE audit_logs PARTITION BY RANGE (created_at);
 
 -- ============================================================================
+-- LISTS TABLE (for organizing reports and other objects)
+-- ============================================================================
+CREATE TABLE lists (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+
+    -- List metadata
+    name VARCHAR(255) NOT NULL,
+    list_type VARCHAR(50) NOT NULL, -- report, contact, editor, etc.
+    description TEXT,
+
+    -- Ownership
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+
+    -- Timestamps
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_lists_tenant_id ON lists(tenant_id);
+CREATE INDEX idx_lists_list_type ON lists(list_type);
+CREATE INDEX idx_lists_created_by ON lists(created_by);
+CREATE INDEX idx_lists_tenant_type ON lists(tenant_id, list_type);
+
+-- ============================================================================
+-- LIST ITEMS TABLE (items within lists)
+-- ============================================================================
+CREATE TABLE list_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    list_id UUID NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+
+    -- Generic item reference
+    item_id UUID NOT NULL, -- References reports.id, contacts.id, etc.
+
+    -- Tracking
+    added_by UUID REFERENCES users(id) ON DELETE SET NULL,
+
+    -- Timestamps
+    added_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+    -- Ensure no duplicates within a list
+    UNIQUE(list_id, item_id)
+);
+
+-- Indexes
+CREATE INDEX idx_list_items_list_id ON list_items(list_id);
+CREATE INDEX idx_list_items_item_id ON list_items(item_id);
+CREATE INDEX idx_list_items_added_by ON list_items(added_by);
+
+-- ============================================================================
 -- TRIGGERS FOR UPDATED_AT
 -- ============================================================================
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -392,6 +444,12 @@ CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_provider_credentials_updated_at BEFORE UPDATE ON provider_credentials
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_lists_updated_at BEFORE UPDATE ON lists
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_list_items_updated_at BEFORE UPDATE ON list_items
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================

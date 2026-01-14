@@ -35,6 +35,8 @@ class User(Base):
 
     # Relationships
     tenant = relationship("Tenant", back_populates="users")
+    created_lists = relationship("List", back_populates="creator")
+    added_list_items = relationship("ListItem", back_populates="adder")
 
     # Constraints
     __table_args__ = (

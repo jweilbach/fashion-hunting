@@ -13,6 +13,8 @@ import Feeds from './pages/Feeds';
 import Jobs from './pages/Jobs';
 import History from './pages/History';
 import Reports from './pages/Reports';
+import Lists from './pages/Lists';
+import ListDetail from './pages/ListDetail';
 import theme from './theme/theme';
 
 // Create React Query client
@@ -104,6 +106,26 @@ function App() {
                   <ProtectedRoute>
                     <Layout>
                       <Reports />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/lists"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Lists />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/lists/:listId"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <ListDetail />
                     </Layout>
                   </ProtectedRoute>
                 }
