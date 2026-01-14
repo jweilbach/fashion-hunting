@@ -3,17 +3,55 @@
  *
  * Define mock API responses for testing. These handlers intercept
  * network requests during tests and return mock data.
+ *
+ * Handlers use environment-aware URL patterns to work across all environments.
  */
 import { http, HttpResponse } from 'msw'
 
-// Base URL for API requests
+// Get API URL from environment (Vite injects this at build time)
+// Falls back to localhost for local development
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+// Base paths for API requests
 const API_BASE = '/api/v1'
+const FULL_API_BASE = `${API_URL}${API_BASE}`
+
+/**
+ * Creates handlers that match both relative and absolute URLs.
+ * This ensures tests work regardless of how the API is called.
+ */
+// Export for use in test files when overriding handlers
+export { API_BASE, FULL_API_BASE }
+
+/**
+ * Creates handlers that match both relative and absolute URLs.
+ * This ensures tests work regardless of how the API is called.
+ * Exported for use in test files when creating custom handlers.
+ */
+export const createHandler = (
+  method: 'get' | 'post' | 'put' | 'delete',
+  path: string,
+  handler: () => ReturnType<typeof HttpResponse.json>
+) => {
+  const relativePath = `${API_BASE}${path}`
+  const absolutePath = `${FULL_API_BASE}${path}`
+
+  const httpMethod = {
+    get: http.get,
+    post: http.post,
+    put: http.put,
+    delete: http.delete,
+  }[method]
+
+  return [httpMethod(relativePath, handler), httpMethod(absolutePath, handler)]
+}
 
 export const handlers = [
   // ==================== Auth Endpoints ====================
+  // Uses both relative and absolute URL patterns for environment compatibility
 
-  http.post(`${API_BASE}/auth/login`, () => {
-    return HttpResponse.json({
+  ...createHandler('post', '/auth/login', () =>
+    HttpResponse.json({
       access_token: 'mock-jwt-token',
       token_type: 'bearer',
       user: {
@@ -24,17 +62,31 @@ export const handlers = [
         tenant_id: 'tenant-123',
       },
     })
-  }),
+  ),
 
-  http.get(`${API_BASE}/auth/me`, () => {
-    return HttpResponse.json({
+  ...createHandler('get', '/auth/me', () =>
+    HttpResponse.json({
       id: 'user-123',
       email: 'test@example.com',
       full_name: 'Test User',
       role: 'editor',
       tenant_id: 'tenant-123',
     })
-  }),
+  ),
+
+  ...createHandler('post', '/auth/token', () =>
+    HttpResponse.json({
+      access_token: 'mock-jwt-token',
+      token_type: 'bearer',
+    })
+  ),
+
+  ...createHandler('post', '/auth/signup', () =>
+    HttpResponse.json({
+      access_token: 'mock-signup-token',
+      token_type: 'bearer',
+    })
+  ),
 
   // ==================== Lists Endpoints ====================
 

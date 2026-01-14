@@ -9,22 +9,31 @@ The project uses:
 - **Frontend**: Vitest with React Testing Library for React/TypeScript tests
 - **Mocking**: MSW (Mock Service Worker) for API mocking in frontend tests
 
+## Test Counts (as of Jan 2025)
+
+| Suite | Tests | Description |
+|-------|-------|-------------|
+| Backend Unit (API) | 84 | Auth, brands, reports, jobs, feeds routers |
+| Frontend API | 87 | API client tests (auth, brands, reports, analytics, jobs, feeds, lists) |
+| Frontend Context | 10 | AuthContext tests |
+| Frontend Components | 9 | ProtectedRoute tests |
+| **Total** | **190** | |
+
 ## Quick Start
 
-### Run All Tests
+### Run All Tests Locally
+
+**IMPORTANT: The Python virtual environment is at the project root (`.venv/`), not in the backend folder.**
 
 ```bash
-# Using the unified test script
-./scripts/run-tests.sh
+# Backend tests (must activate venv first!)
+cd backend
+source ../.venv/bin/activate
+python -m pytest tests/unit/api/ -v
 
-# With coverage
-./scripts/run-tests.sh --coverage
-
-# Backend only
-./scripts/run-tests.sh backend
-
-# Frontend only
-./scripts/run-tests.sh frontend
+# Frontend tests
+cd frontend
+npm test -- --run
 ```
 
 ### Run Tests with Docker
@@ -42,13 +51,35 @@ docker-compose -f docker-compose.test.yml up --build frontend-tests
 
 ## Backend Testing
 
+### Virtual Environment Setup
+
+**The virtual environment is located at the project root: `.venv/`**
+
+```bash
+# From anywhere in the project
+source /path/to/abmc_phase1/.venv/bin/activate
+
+# Or from the backend directory
+cd backend
+source ../.venv/bin/activate
+
+# Verify you're using the correct Python
+which python  # Should show: .../abmc_phase1/.venv/bin/python
+```
+
 ### Directory Structure
 
 ```
 backend/
 ├── tests/
-│   ├── conftest.py           # Shared fixtures
+│   ├── conftest.py           # Shared fixtures (auto-loaded by pytest)
 │   ├── unit/
+│   │   ├── api/              # API router tests (84 tests)
+│   │   │   ├── test_auth_router.py      # 18 tests
+│   │   │   ├── test_brands_router.py    # 14 tests
+│   │   │   ├── test_reports_router.py   # 15 tests
+│   │   │   ├── test_jobs_router.py      # 21 tests
+│   │   │   └── test_feeds_router.py     # 16 tests
 │   │   ├── services/         # Service layer tests
 │   │   ├── repositories/     # Repository layer tests
 │   │   └── providers/        # Provider tests
@@ -62,7 +93,12 @@ backend/
 ### Running Backend Tests
 
 ```bash
+# IMPORTANT: Always activate venv first!
 cd backend
+source ../.venv/bin/activate
+
+# Run all unit API tests
+python -m pytest tests/unit/api/ -v
 
 # Run all tests
 python -m pytest
@@ -77,10 +113,10 @@ python -m pytest tests/integration -v
 python -m pytest --cov=src --cov=api --cov-report=html
 
 # Run specific test file
-python -m pytest tests/unit/services/test_analytics_service.py -v
+python -m pytest tests/unit/api/test_auth_router.py -v
 
 # Run tests matching a pattern
-python -m pytest -k "test_sentiment" -v
+python -m pytest -k "test_login" -v
 ```
 
 ### Test Markers
@@ -143,10 +179,20 @@ frontend/src/
 │   ├── setup.ts              # Test setup (runs before each test)
 │   ├── test-utils.tsx        # Custom render functions
 │   └── mocks/
-│       ├── handlers.ts       # MSW request handlers
+│       ├── handlers.ts       # MSW request handlers (environment-aware)
 │       └── server.ts         # MSW server setup
-├── api/__tests__/            # API client tests
-├── components/__tests__/     # Component tests
+├── api/__tests__/            # API client tests (87 tests)
+│   ├── auth.test.ts          # 7 tests
+│   ├── brands.test.ts        # 11 tests
+│   ├── reports.test.ts       # 17 tests
+│   ├── analytics.test.ts     # 7 tests
+│   ├── jobs.test.ts          # 16 tests
+│   ├── feeds.test.ts         # 16 tests
+│   └── lists.test.ts         # 13 tests
+├── context/__tests__/        # Context tests (10 tests)
+│   └── AuthContext.test.tsx  # Auth provider tests
+├── components/__tests__/     # Component tests (9 tests)
+│   └── ProtectedRoute.test.tsx
 └── pages/__tests__/          # Page-level tests
 ```
 
@@ -227,16 +273,63 @@ import {
 
 ### MSW Handlers
 
-Add mock API responses in `src/test/mocks/handlers.ts`:
+MSW handlers are in `src/test/mocks/handlers.ts`. The handlers are **environment-aware** and work across local development, staging, and production environments.
+
+#### How Environment-Aware Handlers Work
+
+The handlers read `VITE_API_URL` from the environment and create handlers that match both relative and absolute URLs:
+
+```tsx
+// handlers.ts reads the API URL from environment
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE = '/api/v1'
+
+// createHandler utility creates handlers for BOTH URL patterns
+export const createHandler = (method, path, handler) => {
+  // Returns handlers for both:
+  // - /api/v1/auth/me (relative)
+  // - http://localhost:8000/api/v1/auth/me (absolute)
+}
+```
+
+#### Adding New Handlers
+
+Use the `createHandler` utility to ensure your handlers work in all environments:
 
 ```tsx
 import { http, HttpResponse } from 'msw'
+import { createHandler } from './handlers'
 
 export const handlers = [
-  http.get('/api/v1/my-endpoint/', () => {
-    return HttpResponse.json({ data: 'mocked' })
-  }),
+  // Environment-aware handler (recommended)
+  ...createHandler('get', '/my-endpoint/', () =>
+    HttpResponse.json({ data: 'mocked' })
+  ),
+
+  // Or manually for non-API routes
+  http.get('/health', () => HttpResponse.json({ status: 'ok' })),
 ]
+```
+
+#### Overriding Handlers in Tests
+
+Use `createHandler` when overriding handlers in individual tests:
+
+```tsx
+import { server } from '../../test/mocks/server'
+import { createHandler } from '../../test/mocks/handlers'
+import { HttpResponse } from 'msw'
+
+it('handles error response', async () => {
+  // Override for this test only
+  server.use(
+    ...createHandler('get', '/auth/me', () =>
+      HttpResponse.json({ detail: 'Unauthorized' }, { status: 401 })
+    )
+  )
+
+  // ... test code
+})
 ```
 
 ## CI/CD Integration
@@ -286,7 +379,31 @@ npm run test:coverage
 
 ## Troubleshooting
 
-### Backend: "Module not found"
+### Backend: "No module named pytest" or other import errors
+
+**Most common cause**: Virtual environment not activated.
+
+```bash
+# The venv is at the PROJECT ROOT, not in backend/
+cd backend
+source ../.venv/bin/activate  # Note the ../
+
+# Verify correct Python
+which python
+# Should show: /path/to/abmc_phase1/.venv/bin/python
+
+# NOT: /opt/homebrew/bin/python3 or similar
+```
+
+### Backend: "ModuleNotFoundError: No module named 'psycopg2'"
+
+This happens when running tests outside Docker without the venv. The venv has all dependencies installed. If you must run without venv:
+
+```bash
+pip install psycopg2-binary  # For PostgreSQL driver
+```
+
+### Backend: PYTHONPATH issues
 
 Ensure PYTHONPATH includes backend directory:
 ```bash
@@ -299,6 +416,13 @@ Install dependencies:
 ```bash
 cd frontend && npm install
 ```
+
+### Frontend: MSW not intercepting requests
+
+If API calls aren't being mocked, check:
+1. Handler uses correct URL pattern (use `createHandler` for environment-aware handlers)
+2. Server is started in setup.ts
+3. Handler is exported in handlers.ts
 
 ### Tests timing out
 
@@ -314,4 +438,12 @@ def test_slow_operation():
 it('slow test', async () => {
   ...
 }, { timeout: 10000 })
+```
+
+### Docker Compose tests failing
+
+The docker-compose.test.yml requires the images to be built. Run:
+```bash
+docker-compose -f docker-compose.test.yml build
+docker-compose -f docker-compose.test.yml up
 ```

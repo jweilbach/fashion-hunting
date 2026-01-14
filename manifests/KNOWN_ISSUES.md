@@ -2563,4 +2563,52 @@ PR firms mention "divide and conquer" and "lead routing" - they need to assign a
 
 ---
 
-*Last Updated: 2025-01-13*
+## Deprecation Warnings (Low Priority)
+
+The following deprecation warnings appear during test runs. These are non-breaking but should be addressed before upgrading to future Python/library versions.
+
+### Python datetime.utcnow() Deprecated
+**Status**: Open
+**Priority**: Low
+**Affected Files**:
+- `backend/api/auth.py:43`
+- `backend/tests/unit/api/test_auth_router.py:37-38`
+- `backend/tests/unit/api/test_brands_router.py:37-38`
+
+**Warning**: `datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).`
+
+**Fix**: Replace `datetime.utcnow()` with `datetime.now(datetime.UTC)`
+
+### SQLAlchemy declarative_base() Moved
+**Status**: Open
+**Priority**: Low
+**Affected Files**:
+- `backend/src/models/base.py:37`
+
+**Warning**: `The declarative_base() function is now available as sqlalchemy.orm.declarative_base(). (deprecated since: 2.0)`
+
+**Fix**: Change import to `from sqlalchemy.orm import declarative_base`
+
+### FastAPI on_event Deprecated
+**Status**: Open
+**Priority**: Low
+**Affected Files**:
+- `backend/api/main.py:123, 140`
+
+**Warning**: `on_event is deprecated, use lifespan event handlers instead.`
+
+**Fix**: Migrate to lifespan context manager pattern per [FastAPI docs](https://fastapi.tiangolo.com/advanced/events/)
+
+### Pydantic Class-Based Config Deprecated
+**Status**: Open
+**Priority**: Low
+**Affected Files**:
+- `backend/api/config.py:12`
+
+**Warning**: `Support for class-based config is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0.`
+
+**Fix**: Use `model_config = ConfigDict(...)` instead of `class Config:`
+
+---
+
+*Last Updated: 2025-01-14*
