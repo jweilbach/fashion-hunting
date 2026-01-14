@@ -219,6 +219,12 @@ CREATE TABLE job_executions (
     error_message TEXT,
     execution_log TEXT,
 
+    -- Progress tracking
+    total_items INTEGER DEFAULT 0,
+    current_item_index INTEGER DEFAULT 0,
+    current_item_title VARCHAR(500),
+    celery_task_id VARCHAR(255),
+
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -228,6 +234,7 @@ CREATE INDEX idx_job_executions_job_id ON job_executions(job_id);
 CREATE INDEX idx_job_executions_tenant_id ON job_executions(tenant_id);
 CREATE INDEX idx_job_executions_started_at ON job_executions(started_at DESC);
 CREATE INDEX idx_job_executions_status ON job_executions(status);
+CREATE INDEX idx_job_executions_celery_task_id ON job_executions(celery_task_id);
 
 -- ============================================================================
 -- BRAND CONFIGURATIONS TABLE
