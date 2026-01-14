@@ -61,7 +61,7 @@ export const reportsApi = {
       page: number;
       page_size: number;
       pages: number;
-    }>(`/api/v1/reports?${params.toString()}`);
+    }>(`/api/v1/reports/?${params.toString()}`);
 
     // Transform response to frontend format
     const { items, total, page: respPage, page_size } = response.data;
