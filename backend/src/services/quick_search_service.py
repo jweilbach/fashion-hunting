@@ -33,7 +33,7 @@ class QuickSearchService:
 
     def __init__(self, db: Session, tenant_id: str, progress_callback: Optional[callable] = None):
         """
-        Initialize quick search service for a tenant.
+        Initialize quick search service for a tenant .
 
         Args:
             db: Database session
