@@ -1,0 +1,75 @@
+# Docker Compose for running tests
+# Usage:
+#   docker-compose -f docker-compose.test.yml up --build backend-tests
+#   docker-compose -f docker-compose.test.yml up --build frontend-tests
+#   docker-compose -f docker-compose.test.yml up --build  # Run all tests
+
+version: '3.8'
+
+services:
+  # Backend tests with in-memory SQLite
+  backend-tests:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.test
+    environment:
+      - ENV=test
+      - DATABASE_URL=sqlite:///:memory:
+      - SECRET_KEY=test-secret-key
+      - JWT_SECRET_KEY=test-jwt-secret
+      - OPENAI_API_KEY=test-key
+    volumes:
+      - ./backend:/app/backend:ro
+      - ./database:/app/database:ro
+
+  # Backend integration tests with real PostgreSQL
+  backend-integration-tests:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.test
+    environment:
+      - ENV=test
+      - DATABASE_URL=postgresql://postgres:postgres@test-db:5432/abmc_test
+      - SECRET_KEY=test-secret-key
+      - JWT_SECRET_KEY=test-jwt-secret
+      - OPENAI_API_KEY=test-key
+    depends_on:
+      test-db:
+        condition: service_healthy
+    command: ["python", "-m", "pytest", "-v", "-m", "integration"]
+    volumes:
+      - ./backend:/app/backend:ro
+      - ./database:/app/database:ro
+
+  # Frontend tests
+  frontend-tests:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile.test
+    volumes:
+      - ./frontend/src:/app/src:ro
+
+  # Test database
+  test-db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=abmc_test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    tmpfs:
+      - /var/lib/postgresql/data  # Use tmpfs for faster tests
+
+  # Run all tests sequentially
+  all-tests:
+    image: alpine
+    depends_on:
+      backend-tests:
+        condition: service_completed_successfully
+      frontend-tests:
+        condition: service_completed_successfully
+    command: ["echo", "All tests passed!"]
