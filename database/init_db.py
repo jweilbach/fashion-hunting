@@ -411,15 +411,19 @@ def main():
 
     try:
         # Step 1: Create database
+        print("\n[Step 1/4] Checking/creating database...")
         create_database_if_not_exists()
 
         # Step 2: Run schema (skipped if tables already exist)
+        print("\n[Step 2/4] Running schema (if needed)...")
         run_schema()
 
         # Step 3: Create superuser (Lavacake tenant + weilbach@gmail.com)
+        print("\n[Step 3/4] Creating superuser (Lavacake tenant + weilbach@gmail.com)...")
         create_superuser_if_not_exists()
 
         # Step 4: Verify
+        print("\n[Step 4/4] Verifying installation...")
         verify_installation()
 
     except Exception as e:
