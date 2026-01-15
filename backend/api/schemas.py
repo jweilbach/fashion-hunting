@@ -394,6 +394,82 @@ class HealthCheck(BaseModel):
 
 
 # ============================================================================
+# List Schemas
+# ============================================================================
+
+class ListBase(BaseModel):
+    name: str
+    list_type: str = "report"  # report, contact, editor
+    description: Optional[str] = None
+
+
+class ListCreate(ListBase):
+    pass  # tenant_id and created_by set from authenticated user
+
+
+class ListUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+class ListItemBase(BaseModel):
+    item_id: UUID
+
+
+class ListItemCreate(ListItemBase):
+    pass
+
+
+class ListItemBulkAdd(BaseModel):
+    item_ids: List[UUID]
+
+
+class ListItemMultiListAdd(BaseModel):
+    list_ids: List[UUID]
+    item_ids: List[UUID]
+
+
+class ListItem(BaseModel):
+    id: UUID
+    list_id: UUID
+    item_id: UUID
+    added_by: Optional[UUID] = None
+    adder_name: Optional[str] = None
+    added_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ListResponse(ListBase):
+    id: UUID
+    tenant_id: UUID
+    created_by: Optional[UUID] = None
+    creator_name: Optional[str] = None
+    item_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ListWithItems(ListResponse):
+    items: List[ListItem] = []
+
+
+class ListWithReports(ListResponse):
+    reports: List[Report] = []
+
+
+class ListListResponse(BaseModel):
+    items: List[ListResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+# ============================================================================
 # Error Schemas
 # ============================================================================
 

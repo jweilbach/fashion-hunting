@@ -1,0 +1,17 @@
+# Frontend Test Dockerfile
+# Used for running tests in CI/CD or locally
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY frontend/package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy frontend source
+COPY frontend/ ./
+
+# Run tests by default
+CMD ["npm", "run", "test:run"]

@@ -1,7 +1,9 @@
 #!/bin/bash
 # Monitor all application logs in real-time
 
-LOG_DIR="$(dirname "$0")/backend/logs"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+LOG_DIR="$PROJECT_ROOT/backend/logs"
 
 echo "==================================================================="
 echo "Monitoring logs from: $LOG_DIR"

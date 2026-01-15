@@ -151,3 +151,42 @@ export interface BarChartData {
   name: string;
   value: number;
 }
+
+// List types
+export interface List {
+  id: string;
+  tenant_id: string;
+  name: string;
+  list_type: 'report' | 'contact' | 'editor';
+  description?: string;
+  created_by?: string;
+  creator_name?: string;
+  item_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListItem {
+  id: string;
+  list_id: string;
+  item_id: string;
+  added_by?: string;
+  adder_name?: string;
+  added_at: string;
+  updated_at: string;
+}
+
+export interface ListWithReports extends List {
+  reports: Report[];
+}
+
+export interface ListCreate {
+  name: string;
+  list_type?: 'report' | 'contact' | 'editor';
+  description?: string;
+}
+
+export interface ListUpdate {
+  name?: string;
+  description?: string;
+}

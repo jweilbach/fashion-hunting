@@ -16,6 +16,7 @@ NC='\033[0m' # No Color
 
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # =============================================================================
 # PRE-FLIGHT CHECKS - Detect and clean up leaked processes
@@ -87,7 +88,7 @@ echo -e "${BLUE}Starting Backend API (FastAPI)...${NC}"
 if check_running 8000 "Backend API"; then
     echo -e "${YELLOW}Skipping Backend API startup${NC}"
 else
-    cd "$SCRIPT_DIR"
+    cd "$PROJECT_ROOT"
     ./backend/scripts/run_api.sh > /dev/null 2>&1 &
     sleep 3
 
@@ -105,7 +106,7 @@ if pgrep -f "celery.*worker" > /dev/null 2>&1; then
     echo -e "${YELLOW}⚠ Celery Worker is already running${NC}"
     echo -e "${YELLOW}Skipping Celery Worker startup${NC}"
 else
-    cd "$SCRIPT_DIR"
+    cd "$PROJECT_ROOT"
     ./backend/scripts/run_celery_worker.sh > /dev/null 2>&1 &
     sleep 3
 
@@ -122,7 +123,7 @@ echo -e "${BLUE}Starting Frontend (Vite)...${NC}"
 if check_running 5173 "Frontend"; then
     echo -e "${YELLOW}Skipping Frontend startup${NC}"
 else
-    cd "$SCRIPT_DIR/frontend"
+    cd "$PROJECT_ROOT/frontend"
     source ~/.nvm/nvm.sh
     nvm use 20 > /dev/null 2>&1
     npm run dev > /dev/null 2>&1 &
@@ -144,5 +145,5 @@ echo -e "  ${BLUE}Backend API:${NC} http://0.0.0.0:8000"
 echo -e "  ${BLUE}Frontend:${NC} http://localhost:5173"
 echo -e "  ${BLUE}Celery Worker:${NC} Running in background"
 echo ""
-echo -e "To stop all servers, run: ${YELLOW}./stop_all.sh${NC}"
+echo -e "To stop all servers, run: ${YELLOW}./scripts/stop_all.sh${NC}"
 echo ""

@@ -24,6 +24,7 @@ import {
   WorkOutline as JobsIcon,
   Assessment as ReportsIcon,
   History as HistoryIcon,
+  PlaylistAddCheck as ListsIcon,
   LogoutOutlined as LogoutIcon,
   ChevronRight as ChevronRightIcon,
   ExpandMore as ExpandMoreIcon,
@@ -434,6 +435,49 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 })}
               </List>
             </Collapse>
+
+            {/* Lists */}
+            <ListItem disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton
+                selected={location.pathname.startsWith('/lists')}
+                onClick={() => navigate('/lists')}
+                sx={{
+                  borderRadius: 2,
+                  transition: 'all 0.3s ease',
+                  ...(location.pathname.startsWith('/lists') && {
+                    background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.15)}, ${alpha(theme.palette.secondary.main, 0.15)})`,
+                    boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`,
+                    '&:hover': {
+                      background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.2)}, ${alpha(theme.palette.secondary.main, 0.2)})`,
+                    },
+                  }),
+                  ...(!location.pathname.startsWith('/lists') && {
+                    '&:hover': {
+                      background: alpha(theme.palette.primary.main, 0.08),
+                      transform: 'translateX(4px)',
+                    },
+                  }),
+                }}
+              >
+                <ListItemIcon
+                  sx={{
+                    minWidth: 40,
+                    color: location.pathname.startsWith('/lists') ? theme.palette.primary.main : theme.palette.text.secondary,
+                  }}
+                >
+                  <ListsIcon />
+                </ListItemIcon>
+                <ListItemText
+                  primary="Lists"
+                  slotProps={{
+                    primary: {
+                      fontWeight: location.pathname.startsWith('/lists') ? 600 : 500,
+                      fontSize: '0.95rem',
+                    },
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
           </List>
 
           {/* Sidebar Footer */}
