@@ -29,8 +29,8 @@ def run_bootstrap():
     # Step 1: Initialize database tables
     logger.info("[Bootstrap 1/2] Initializing database tables...")
     try:
-        from src.models.base import init_database
-        init_database()
+        from src.models.base import init_db
+        init_db()
         logger.info("Database tables initialized")
     except Exception as e:
         logger.error(f"Failed to initialize database tables: {e}")
