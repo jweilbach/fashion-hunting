@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { List, ListWithReports, ListCreate, ListUpdate, ListItem, PaginatedResponse } from '../types';
+import type { List, ListWithReports, ListCreate, ListUpdate, ListItem } from '../types';
 
 export interface ListsResponse {
   items: List[];

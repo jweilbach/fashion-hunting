@@ -53,9 +53,8 @@ describe('brandsApi', () => {
         data: {
           id: 'brand-123',
           brand_name: 'Nike',
-          aliases: ['nike', 'Nike Inc'],
           is_known_brand: true,
-          should_ignore: false,
+          mention_count: 100,
         },
       }
       vi.mocked(apiClient.get).mockResolvedValue(mockResponse)
@@ -79,13 +78,11 @@ describe('brandsApi', () => {
     it('should create brand with provided data', async () => {
       const newBrand = {
         brand_name: 'New Brand',
-        aliases: ['newbrand', 'NB'],
         is_known_brand: true,
-        should_ignore: false,
         category: 'Fashion',
       }
       const mockResponse = {
-        data: { id: 'new-brand-id', ...newBrand },
+        data: { id: 'new-brand-id', mention_count: 0, ...newBrand },
       }
       vi.mocked(apiClient.post).mockResolvedValue(mockResponse)
 
@@ -99,9 +96,9 @@ describe('brandsApi', () => {
 
   describe('updateBrand', () => {
     it('should update brand with provided data', async () => {
-      const updateData = { brand_name: 'Updated Name', should_ignore: true }
+      const updateData = { brand_name: 'Updated Name', is_known_brand: false }
       const mockResponse = {
-        data: { id: 'brand-123', brand_name: 'Updated Name', should_ignore: true },
+        data: { id: 'brand-123', brand_name: 'Updated Name', is_known_brand: false, mention_count: 50 },
       }
       vi.mocked(apiClient.put).mockResolvedValue(mockResponse)
 
@@ -109,7 +106,7 @@ describe('brandsApi', () => {
 
       expect(apiClient.put).toHaveBeenCalledWith('/api/v1/brands/brand-123', updateData)
       expect(result.brand_name).toBe('Updated Name')
-      expect(result.should_ignore).toBe(true)
+      expect(result.is_known_brand).toBe(false)
     })
   })
 

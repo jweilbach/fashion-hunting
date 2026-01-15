@@ -4,9 +4,9 @@
  * Custom render function and utilities for testing React components
  * with all the necessary providers (Router, Query, Theme, Auth).
  */
-import React, { ReactElement, ReactNode } from 'react'
-import { render, RenderOptions } from '@testing-library/react'
-import { BrowserRouter, MemoryRouter } from 'react-router-dom'
+import type { ReactElement, ReactNode } from 'react'
+import { render, type RenderOptions } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'

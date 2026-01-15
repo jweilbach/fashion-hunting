@@ -171,7 +171,7 @@ describe('ProtectedRoute', () => {
       })
 
       // Admin accessing viewer content
-      const { rerender } = renderWithRouter(
+      renderWithRouter(
         <ProtectedRoute requiredRole="viewer">
           <div>Content</div>
         </ProtectedRoute>
