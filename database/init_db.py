@@ -406,7 +406,7 @@ def verify_installation():
 def main():
     """Main initialization flow"""
     print("="*60)
-    print("ABMC Phase 1 - Database Initialization")
+    print("Phase 1 - Database Initialization")
     print("="*60)
 
     try:
