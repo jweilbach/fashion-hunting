@@ -5,7 +5,6 @@ import {
   AppBar,
   Toolbar,
   Typography,
-  Button,
   Drawer,
   List,
   ListItem,
@@ -16,6 +15,9 @@ import {
   alpha,
   useTheme,
   Collapse,
+  Menu,
+  MenuItem,
+  Divider,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -29,6 +31,9 @@ import {
   ChevronRight as ChevronRightIcon,
   ExpandMore as ExpandMoreIcon,
   ViewList as ViewAllIcon,
+  Person as PersonIcon,
+  Group as UsersIcon,
+  AdminPanelSettings as AdminIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { PROVIDER_CATEGORIES } from '../config/providers';
@@ -44,6 +49,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
+
+  // User menu anchor state
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const userMenuOpen = Boolean(anchorEl);
 
   // Expansion state for Reports menu and its submenus
   const [reportsExpanded, setReportsExpanded] = useState(() => {
@@ -63,7 +72,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     return expanded;
   });
 
+  const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleUserMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleProfileClick = () => {
+    handleUserMenuClose();
+    navigate('/profile');
+  };
+
   const handleLogout = () => {
+    handleUserMenuClose();
     logout();
     navigate('/login');
   };
@@ -162,31 +185,68 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 )}
               </Box>
               <Avatar
+                onClick={handleUserMenuOpen}
                 sx={{
                   width: 40,
                   height: 40,
                   background: `linear-gradient(135deg, ${theme.palette.secondary.main}, ${theme.palette.secondary.dark})`,
                   fontWeight: 600,
                   fontSize: '1rem',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                  '&:hover': {
+                    transform: 'scale(1.05)',
+                    boxShadow: `0 4px 12px ${alpha(theme.palette.common.black, 0.3)}`,
+                  },
                 }}
               >
                 {user.email.charAt(0).toUpperCase()}
               </Avatar>
-              <Button
-                color="inherit"
-                onClick={handleLogout}
-                startIcon={<LogoutIcon />}
-                sx={{
-                  textTransform: 'none',
-                  fontWeight: 500,
-                  px: 2,
-                  '&:hover': {
-                    backgroundColor: alpha(theme.palette.common.white, 0.1),
+              <Menu
+                anchorEl={anchorEl}
+                open={userMenuOpen}
+                onClose={handleUserMenuClose}
+                onClick={handleUserMenuClose}
+                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+                slotProps={{
+                  paper: {
+                    elevation: 3,
+                    sx: {
+                      mt: 1.5,
+                      minWidth: 180,
+                      borderRadius: 2,
+                      overflow: 'visible',
+                      '&:before': {
+                        content: '""',
+                        display: 'block',
+                        position: 'absolute',
+                        top: 0,
+                        right: 14,
+                        width: 10,
+                        height: 10,
+                        bgcolor: 'background.paper',
+                        transform: 'translateY(-50%) rotate(45deg)',
+                        zIndex: 0,
+                      },
+                    },
                   },
                 }}
               >
-                Logout
-              </Button>
+                <MenuItem onClick={handleProfileClick}>
+                  <ListItemIcon>
+                    <PersonIcon fontSize="small" />
+                  </ListItemIcon>
+                  Profile
+                </MenuItem>
+                <Divider />
+                <MenuItem onClick={handleLogout}>
+                  <ListItemIcon>
+                    <LogoutIcon fontSize="small" />
+                  </ListItemIcon>
+                  Logout
+                </MenuItem>
+              </Menu>
             </Box>
           )}
         </Toolbar>
@@ -478,6 +538,96 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 />
               </ListItemButton>
             </ListItem>
+
+            {/* Users - Admin Only */}
+            {user?.role === 'admin' && (
+              <ListItem disablePadding sx={{ mb: 0.5 }}>
+                <ListItemButton
+                  selected={location.pathname === '/users'}
+                  onClick={() => navigate('/users')}
+                  sx={{
+                    borderRadius: 2,
+                    transition: 'all 0.3s ease',
+                    ...(location.pathname === '/users' && {
+                      background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.15)}, ${alpha(theme.palette.secondary.main, 0.15)})`,
+                      boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`,
+                      '&:hover': {
+                        background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.2)}, ${alpha(theme.palette.secondary.main, 0.2)})`,
+                      },
+                    }),
+                    ...(location.pathname !== '/users' && {
+                      '&:hover': {
+                        background: alpha(theme.palette.primary.main, 0.08),
+                        transform: 'translateX(4px)',
+                      },
+                    }),
+                  }}
+                >
+                  <ListItemIcon
+                    sx={{
+                      minWidth: 40,
+                      color: location.pathname === '/users' ? theme.palette.primary.main : theme.palette.text.secondary,
+                    }}
+                  >
+                    <UsersIcon />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Users"
+                    slotProps={{
+                      primary: {
+                        fontWeight: location.pathname === '/users' ? 600 : 500,
+                        fontSize: '0.95rem',
+                      },
+                    }}
+                  />
+                </ListItemButton>
+              </ListItem>
+            )}
+
+            {/* Super Admin Dashboard - Superusers Only */}
+            {user?.is_superuser && (
+              <ListItem disablePadding sx={{ mb: 0.5 }}>
+                <ListItemButton
+                  selected={location.pathname === '/admin'}
+                  onClick={() => navigate('/admin')}
+                  sx={{
+                    borderRadius: 2,
+                    transition: 'all 0.3s ease',
+                    ...(location.pathname === '/admin' && {
+                      background: `linear-gradient(135deg, ${alpha(theme.palette.error.main, 0.15)}, ${alpha(theme.palette.warning.main, 0.15)})`,
+                      boxShadow: `0 4px 12px ${alpha(theme.palette.error.main, 0.2)}`,
+                      '&:hover': {
+                        background: `linear-gradient(135deg, ${alpha(theme.palette.error.main, 0.2)}, ${alpha(theme.palette.warning.main, 0.2)})`,
+                      },
+                    }),
+                    ...(location.pathname !== '/admin' && {
+                      '&:hover': {
+                        background: alpha(theme.palette.error.main, 0.08),
+                        transform: 'translateX(4px)',
+                      },
+                    }),
+                  }}
+                >
+                  <ListItemIcon
+                    sx={{
+                      minWidth: 40,
+                      color: location.pathname === '/admin' ? theme.palette.error.main : theme.palette.text.secondary,
+                    }}
+                  >
+                    <AdminIcon />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Super Admin"
+                    slotProps={{
+                      primary: {
+                        fontWeight: location.pathname === '/admin' ? 600 : 500,
+                        fontSize: '0.95rem',
+                      },
+                    }}
+                  />
+                </ListItemButton>
+              </ListItem>
+            )}
           </List>
 
           {/* Sidebar Footer */}

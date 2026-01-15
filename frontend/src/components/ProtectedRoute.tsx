@@ -6,9 +6,10 @@ import { Box, CircularProgress } from '@mui/material';
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredRole?: 'admin' | 'editor' | 'viewer';
+  requireSuperuser?: boolean;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole, requireSuperuser }) => {
   const { user, isAuthenticated, isLoading } = useAuth();
 
   // Show loading spinner while checking authentication
@@ -23,6 +24,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
   // Redirect to login if not authenticated
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Check superuser access if required
+  if (requireSuperuser && user) {
+    if (!user.is_superuser) {
+      return <Navigate to="/dashboard" replace />;
+    }
   }
 
   // Check role-based access if required

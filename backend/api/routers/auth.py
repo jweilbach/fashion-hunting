@@ -8,9 +8,12 @@ from sqlalchemy.orm import Session
 from datetime import timedelta
 import sys
 from pathlib import Path
+import logging
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+
+logger = logging.getLogger(__name__)
 
 from api.database import get_db
 from api.config import settings
@@ -282,11 +285,95 @@ async def get_current_user_info(
     return {
         "id": str(current_user.id),
         "email": current_user.email,
+        "first_name": current_user.first_name,
+        "last_name": current_user.last_name,
+        "full_name": current_user.full_name,
         "role": current_user.role,
         "tenant_id": str(current_user.tenant_id),
         "tenant_name": tenant.name if tenant else None,
+        "is_superuser": current_user.is_superuser,
         "created_at": current_user.created_at.isoformat() if current_user.created_at else None
     }
+
+
+@router.get("/profile", response_model=schemas.ProfileResponse)
+async def get_profile(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get current user's full profile including tenant information
+
+    Args:
+        current_user: Authenticated user from JWT token
+        db: Database session
+
+    Returns:
+        Full profile with tenant details
+    """
+    tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+
+    return schemas.ProfileResponse(
+        id=current_user.id,
+        email=current_user.email,
+        first_name=current_user.first_name,
+        last_name=current_user.last_name,
+        full_name=current_user.full_name,
+        role=current_user.role,
+        tenant_id=current_user.tenant_id,
+        tenant_name=tenant.name if tenant else None,
+        tenant_plan=tenant.plan if tenant else None,
+        is_active=current_user.is_active,
+        last_login=current_user.last_login,
+        created_at=current_user.created_at,
+        updated_at=current_user.updated_at
+    )
+
+
+@router.patch("/profile", response_model=schemas.ProfileResponse)
+async def update_profile(
+    profile_data: schemas.ProfileUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update current user's profile (name fields only)
+
+    Args:
+        profile_data: Fields to update (first_name, last_name)
+        current_user: Authenticated user
+        db: Database session
+
+    Returns:
+        Updated profile
+    """
+    user_repo = UserRepository(db)
+
+    # Get update data excluding unset fields
+    update_data = profile_data.model_dump(exclude_unset=True)
+
+    if update_data:
+        updated_user = user_repo.update(current_user.id, **update_data)
+    else:
+        updated_user = current_user
+
+    tenant = db.query(Tenant).filter(Tenant.id == updated_user.tenant_id).first()
+
+    return schemas.ProfileResponse(
+        id=updated_user.id,
+        email=updated_user.email,
+        first_name=updated_user.first_name,
+        last_name=updated_user.last_name,
+        full_name=updated_user.full_name,
+        role=updated_user.role,
+        tenant_id=updated_user.tenant_id,
+        tenant_name=tenant.name if tenant else None,
+        tenant_plan=tenant.plan if tenant else None,
+        is_active=updated_user.is_active,
+        last_login=updated_user.last_login,
+        created_at=updated_user.created_at,
+        updated_at=updated_user.updated_at
+    )
 
 
 @router.post("/change-password")
@@ -342,4 +429,5 @@ async def logout(current_user: User = Depends(get_current_active_user)):
     Returns:
         Success message
     """
+    logger.info(f"User logged out: '{current_user.email}'")
     return {"message": "Logged out successfully"}

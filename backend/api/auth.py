@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 import bcrypt
+import logging
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -14,6 +15,8 @@ from api.config import settings
 from api.database import get_db
 from api.schemas import TokenData
 from models.user import User
+
+logger = logging.getLogger(__name__)
 
 
 # HTTP Bearer token scheme
@@ -87,14 +90,18 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     user = db.query(User).filter(User.email == email).first()
 
     if not user:
+        logger.warning(f"Login failed: user not found for email '{email}'")
         return None
 
     if not verify_password(password, user.password_hash):
+        logger.warning(f"Login failed: invalid password for email '{email}'")
         return None
 
     if not user.is_active:
+        logger.warning(f"Login failed: inactive user '{email}'")
         return None
 
+    logger.info(f"Login successful for user '{email}'")
     return user
 
 
@@ -169,3 +176,78 @@ class RoleChecker:
 require_admin = RoleChecker(["admin"])
 require_editor = RoleChecker(["admin", "editor"])
 require_viewer = RoleChecker(["admin", "editor", "viewer"])
+
+
+class SuperAdminChecker:
+    """
+    Dependency to check if user is a superuser (cross-tenant admin)
+
+    Usage:
+        require_superadmin = SuperAdminChecker()
+
+        @app.get("/admin/tenants")
+        def list_tenants(
+            current_user: User = Depends(require_superadmin)
+        ):
+            ...
+    """
+
+    def __call__(self, user: User = Depends(get_current_user)) -> User:
+        if not user.is_superuser:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Super admin access required"
+            )
+        return user
+
+
+# Pre-configured super admin checker
+require_superadmin = SuperAdminChecker()
+
+
+def create_impersonation_token(
+    target_user: User,
+    superadmin_email: str,
+    expires_delta: Optional[timedelta] = None
+) -> str:
+    """
+    Create an impersonation token for a super admin to act as another user.
+
+    The token includes 'impersonated_by' field to track the super admin's email
+    for audit logging purposes.
+
+    Args:
+        target_user: The user to impersonate
+        superadmin_email: Email of the super admin performing impersonation
+        expires_delta: Optional expiry time (defaults to 1 hour for safety)
+
+    Returns:
+        JWT token for the impersonated session
+    """
+    # Default to 1 hour for impersonation tokens (shorter for security)
+    if expires_delta is None:
+        expires_delta = timedelta(hours=1)
+
+    data = {
+        "sub": str(target_user.id),
+        "tenant_id": str(target_user.tenant_id),
+        "email": target_user.email,
+        "role": target_user.role,
+        "impersonated_by": f"super_admin:{superadmin_email}",
+    }
+
+    return create_access_token(data, expires_delta)
+
+
+def get_impersonation_info(token: str) -> Optional[str]:
+    """
+    Extract impersonation info from a token if present.
+
+    Returns:
+        The 'impersonated_by' value if this is an impersonation token, None otherwise
+    """
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        return payload.get("impersonated_by")
+    except JWTError:
+        return None

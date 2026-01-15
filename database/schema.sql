@@ -282,11 +282,14 @@ CREATE TABLE users (
     -- User info
     email VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    full_name VARCHAR(255),
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    full_name VARCHAR(255), -- Kept for backwards compatibility
 
     -- Permissions
     role VARCHAR(50) DEFAULT 'viewer', -- admin, editor, viewer
     is_active BOOLEAN DEFAULT true,
+    is_superuser BOOLEAN DEFAULT false, -- Cross-tenant super admin
 
     -- Auth
     last_login TIMESTAMP WITH TIME ZONE,
@@ -303,6 +306,7 @@ CREATE INDEX idx_users_tenant_id ON users(tenant_id);
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_active ON users(is_active);
 CREATE INDEX idx_users_tenant_active ON users(tenant_id, is_active);
+CREATE INDEX idx_users_superuser ON users(is_superuser) WHERE is_superuser = TRUE;
 
 -- ============================================================================
 -- ANALYTICS CACHE TABLE (for dashboard performance)

@@ -21,7 +21,9 @@ def create_mock_user(
     password_hash=None,
     tenant_id=None,
     role="admin",
-    is_active=True
+    is_active=True,
+    first_name="Test",
+    last_name="User"
 ):
     """Create a mock user object for testing."""
     from api.auth import get_password_hash
@@ -33,7 +35,9 @@ def create_mock_user(
     user.tenant_id = tenant_id or uuid.uuid4()
     user.role = role
     user.is_active = is_active
-    user.full_name = "Test User"
+    user.first_name = first_name
+    user.last_name = last_name
+    user.full_name = f"{first_name} {last_name}" if first_name and last_name else None
     user.created_at = datetime.utcnow()
     user.updated_at = datetime.utcnow()
     user.last_login = None

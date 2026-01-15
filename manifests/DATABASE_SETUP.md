@@ -159,18 +159,19 @@ Database 'abmc_reports' created successfully
 Running schema from database/schema.sql...
 Schema executed successfully
 
-Created 13 tables:
-  - analytics_cache
-  - audit_logs
-  - brand_configs
-  - feed_configs
-  - job_executions
+Created 12 tables:
+  - tenants
   - provider_credentials
   - reports
+  - feed_configs
   - scheduled_jobs
-  - tenants
+  - job_executions
+  - brand_configs
   - users
-  ...
+  - analytics_cache
+  - audit_logs
+  - lists
+  - list_items
 
 ============================================================
 Database Verification
@@ -185,7 +186,38 @@ Sample tenant: ABMC Demo (abmc-demo) - demo@alisonbrod.com
 ✓ Database initialization completed successfully!
 ```
 
-### 5. Verify Installation
+### 5. Running Migrations (Existing Databases)
+
+If you have an existing database and need to apply schema updates, run the migration scripts:
+```bash
+# Connect to your database
+psql -h localhost -U postgres -d abmc_reports
+
+# Run a specific migration (example)
+\i backend/migrations/split_full_name.sql
+
+# Or run directly from command line
+psql -h localhost -U postgres -d abmc_reports -f backend/migrations/split_full_name.sql
+```
+
+**Available Migrations:**
+| Migration File | Description |
+|----------------|-------------|
+| `split_full_name.sql` | Adds first_name/last_name columns to users table |
+| `add_source_type_to_reports.sql` | Adds source_type column to reports |
+| `backfill_source_type.sql` | Backfills source_type data for existing reports |
+| `add_brands_gin_index.sql` | Adds GIN index for brand array searches |
+
+**For Railway deployments**, run migrations via Railway's database shell or connect remotely:
+```bash
+# Using Railway CLI
+railway run psql -f backend/migrations/split_full_name.sql
+
+# Or connect directly to Railway PostgreSQL
+psql $DATABASE_URL -f backend/migrations/split_full_name.sql
+```
+
+### 6. Verify Installation
 
 Test the connection again:
 ```bash
@@ -311,7 +343,7 @@ docker-compose down -v
 
 After successful database setup:
 
-1. **Migrate existing Google Sheets data:**
+1. **Migrate existing Google Sheets data (optional):**
    ```bash
    # Update .env with your Google Sheet ID
    GOOGLE_SHEET_ID=your_sheet_id_here
@@ -322,30 +354,53 @@ After successful database setup:
 
 2. **Start the FastAPI backend:**
    ```bash
-   python -m uvicorn api.main:app --reload
+   cd backend
+   python -m uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
    ```
 
-3. **Start the Streamlit dashboard:**
+3. **Start the React frontend:**
    ```bash
-   streamlit run dashboard/app.py
+   cd frontend
+   npm install
+   npm run dev
    ```
 
-4. **Start Celery worker:**
+4. **Start Celery worker (for background jobs):**
    ```bash
+   cd backend
    celery -A celery_app worker --loglevel=info
    ```
 
+5. **Access the application:**
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:8000
+   - API Docs: http://localhost:8000/docs
+
 ## Database Schema
 
-The database includes the following main tables:
+The database includes the following tables:
 
-- **tenants**: Multi-tenant accounts
-- **reports**: Fetched content and analysis results
-- **feed_configs**: RSS/TikTok feed configurations
-- **brand_configs**: Brand tracking and filtering
-- **scheduled_jobs**: Automated task scheduling
-- **users**: User accounts with RBAC
-- **analytics_cache**: Cached dashboard metrics
-- **audit_logs**: Security and compliance logs
+| Table | Description |
+|-------|-------------|
+| **tenants** | Multi-tenant organization accounts with settings and subscription plans |
+| **provider_credentials** | Encrypted API credentials per provider (OpenAI, TikTok, etc.) |
+| **reports** | Fetched content and analysis results with deduplication |
+| **feed_configs** | RSS/TikTok/Instagram feed configurations |
+| **scheduled_jobs** | Automated task scheduling with cron expressions |
+| **job_executions** | Job execution history and progress tracking |
+| **brand_configs** | Brand tracking, aliases, and filtering rules |
+| **users** | User accounts with RBAC (first_name, last_name, role) |
+| **analytics_cache** | Cached dashboard metrics with TTL |
+| **audit_logs** | Security and compliance audit trail |
+| **lists** | User-created lists for organizing reports |
+| **list_items** | Items within lists (report references) |
 
-See [database/schema.sql](database/schema.sql) for full schema details.
+**Key Features:**
+- UUID primary keys throughout
+- Tenant isolation via `tenant_id` foreign keys
+- GIN indexes for array searches (brands)
+- Full-text search on report titles/summaries
+- Automatic `updated_at` triggers
+- Deduplication via SHA256 hash keys
+
+See [database/schema.sql](../database/schema.sql) for full schema details.
