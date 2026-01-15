@@ -39,7 +39,6 @@ import {
   PersonOff as PersonOffIcon,
   PersonAdd as PersonAddIcon,
   AdminPanelSettings as AdminIcon,
-  Edit as EditIcon,
   Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';

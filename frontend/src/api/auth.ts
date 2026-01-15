@@ -19,6 +19,9 @@ export interface TokenResponse {
 export interface UserResponse {
   id: string;
   email: string;
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
   role: 'admin' | 'editor' | 'viewer';
   tenant_id: string;
   tenant_name?: string;
