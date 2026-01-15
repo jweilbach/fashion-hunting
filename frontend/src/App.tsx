@@ -15,6 +15,10 @@ import History from './pages/History';
 import Reports from './pages/Reports';
 import Lists from './pages/Lists';
 import ListDetail from './pages/ListDetail';
+import Profile from './pages/Profile';
+import UserManagement from './pages/UserManagement';
+import AdminDashboard from './pages/AdminDashboard';
+import ImpersonationBanner from './components/ImpersonationBanner';
 import theme from './theme/theme';
 
 // Create React Query client
@@ -34,6 +38,7 @@ function App() {
         <CssBaseline />
         <BrowserRouter>
           <AuthProvider>
+            <ImpersonationBanner />
             <Routes>
               {/* Public routes */}
               <Route path="/login" element={<Login />} />
@@ -126,6 +131,36 @@ function App() {
                   <ProtectedRoute>
                     <Layout>
                       <ListDetail />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Profile />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/users"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Layout>
+                      <UserManagement />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute requireSuperuser>
+                    <Layout>
+                      <AdminDashboard />
                     </Layout>
                   </ProtectedRoute>
                 }

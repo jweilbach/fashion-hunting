@@ -46,7 +46,9 @@ class Tenant(TenantBase):
 
 class UserBase(BaseModel):
     email: EmailStr
-    full_name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    full_name: Optional[str] = None  # Kept for backwards compatibility
     role: str = "viewer"  # admin, editor, viewer
 
 
@@ -57,6 +59,8 @@ class UserCreate(UserBase):
 
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     full_name: Optional[str] = None
     role: Optional[str] = None
     is_active: Optional[bool] = None
@@ -70,6 +74,68 @@ class UserChangePassword(BaseModel):
 class User(UserBase):
     id: UUID
     tenant_id: UUID
+    is_active: bool
+    last_login: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================================
+# User Management Schemas
+# ============================================================================
+
+class UserCreateByAdmin(BaseModel):
+    """Schema for admin to add a new user to their tenant"""
+    email: EmailStr
+    first_name: Optional[str] = Field(None, max_length=100)
+    last_name: Optional[str] = Field(None, max_length=100)
+    role: str = Field(default="viewer", pattern="^(admin|editor|viewer)$")
+
+
+class UserRoleUpdate(BaseModel):
+    """Schema for changing a user's role"""
+    role: str = Field(..., pattern="^(admin|editor|viewer)$")
+
+
+class UserResponse(BaseModel):
+    """User response for admin user list"""
+    id: UUID
+    email: EmailStr
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    full_name: Optional[str] = None
+    role: str
+    is_active: bool
+    last_login: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================================
+# Profile Schemas
+# ============================================================================
+
+class ProfileUpdate(BaseModel):
+    """Schema for updating user profile (name fields only)"""
+    first_name: Optional[str] = Field(None, max_length=100)
+    last_name: Optional[str] = Field(None, max_length=100)
+
+
+class ProfileResponse(BaseModel):
+    """Full profile response including tenant information"""
+    id: UUID
+    email: EmailStr
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    full_name: Optional[str] = None
+    role: str
+    tenant_id: UUID
+    tenant_name: Optional[str] = None
+    tenant_plan: Optional[str] = None
     is_active: bool
     last_login: Optional[datetime] = None
     created_at: datetime
@@ -463,6 +529,78 @@ class ListWithReports(ListResponse):
 
 class ListListResponse(BaseModel):
     items: List[ListResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+# ============================================================================
+# Super Admin Schemas
+# ============================================================================
+
+class TenantAdminResponse(BaseModel):
+    """Tenant response for super admin dashboard"""
+    id: UUID
+    name: str
+    slug: str
+    email: EmailStr
+    company_name: Optional[str] = None
+    plan: str
+    status: str
+    user_count: int = 0
+    report_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+    last_report_run: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TenantStatusUpdate(BaseModel):
+    """Schema for updating tenant status"""
+    status: str = Field(..., pattern="^(active|suspended|cancelled)$")
+
+
+class TenantPlanUpdate(BaseModel):
+    """Schema for updating tenant subscription plan"""
+    plan: str = Field(..., pattern="^(free|starter|professional|enterprise)$")
+
+
+class ImpersonationRequest(BaseModel):
+    """Schema for requesting impersonation token"""
+    user_id: UUID
+
+
+class ImpersonationResponse(BaseModel):
+    """Response containing impersonation token"""
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    impersonated_user: User
+    impersonated_by: str
+
+
+class AdminUserSearchResult(BaseModel):
+    """User result for cross-tenant search"""
+    id: UUID
+    email: EmailStr
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    full_name: Optional[str] = None
+    role: str
+    is_active: bool
+    is_superuser: bool
+    tenant_id: UUID
+    tenant_name: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TenantListResponse(BaseModel):
+    """Paginated list of tenants for super admin"""
+    items: List[TenantAdminResponse]
     total: int
     page: int
     page_size: int

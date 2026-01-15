@@ -945,7 +945,125 @@ CREATE TABLE list_items (
 
 ---
 
+### Super Admin System (Phase 3)
+**Status**: Implemented
+**Date Completed**: 2025-01-15
+
+**Description**:
+A cross-tenant administration system that allows designated super administrators to manage all tenants, view system-wide statistics, and impersonate users for support purposes.
+
+**Key Features**:
+- **Cross-tenant management**: Super admins can view and manage all tenants
+- **Tenant status control**: Activate, suspend, or cancel tenant accounts
+- **Plan management**: Change tenant subscription plans (free/starter/professional/enterprise)
+- **User impersonation**: Act as any non-superuser for support/debugging
+- **System statistics**: View aggregate stats across all tenants
+- **User search**: Search for users across all tenants
+
+**Security Features**:
+- Super admins cannot impersonate other super admins
+- Impersonation tokens expire in 1 hour
+- All impersonated actions include `impersonated_by: super_admin:email` for audit logging
+- Original token preserved and restored when ending impersonation
+- Visual banner displayed during impersonation sessions
+
+**Database Changes**:
+```sql
+-- Added to users table
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_superuser BOOLEAN DEFAULT FALSE;
+CREATE INDEX IF NOT EXISTS idx_users_superuser ON users(is_superuser) WHERE is_superuser = TRUE;
+```
+
+**API Endpoints** (`/api/v1/admin/`):
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/tenants` | List all tenants with user/report counts (paginated) |
+| GET | `/tenants/{id}` | Get detailed tenant information |
+| PATCH | `/tenants/{id}/status` | Update tenant status (active/suspended/cancelled) |
+| PATCH | `/tenants/{id}/plan` | Change tenant subscription plan |
+| POST | `/impersonate/{user_id}` | Get impersonation token for user |
+| GET | `/search/users` | Search users across all tenants |
+| GET | `/stats` | Get system-wide statistics |
+
+**Frontend Components**:
+- **Admin Dashboard** (`/admin`): Superuser-only page with tabs for tenants and user search
+- **Impersonation Banner**: Fixed top banner showing impersonation state with "End" button
+- **Protected Route**: Extended to support `requireSuperuser` prop
+
+**Files Created/Modified**:
+
+*Backend:*
+- `backend/src/models/user.py` - Added `is_superuser` field
+- `backend/migrations/add_superuser_field.sql` - Migration for is_superuser column
+- `database/schema.sql` - Updated users table schema
+- `backend/api/auth.py` - Added `SuperAdminChecker`, `create_impersonation_token()`, `get_impersonation_info()`
+- `backend/api/schemas.py` - Added `TenantAdminResponse`, `TenantStatusUpdate`, `TenantPlanUpdate`, `ImpersonationResponse`, `AdminUserSearchResult`, `TenantListResponse`
+- `backend/api/routers/admin.py` - All admin API endpoints (NEW)
+- `backend/api/routers/auth.py` - Added `is_superuser` to `/me` response
+- `backend/api/main.py` - Registered admin router
+
+*Frontend:*
+- `frontend/src/api/admin.ts` - Admin API client (NEW)
+- `frontend/src/pages/AdminDashboard.tsx` - Admin dashboard page (NEW)
+- `frontend/src/components/ImpersonationBanner.tsx` - Impersonation indicator (NEW)
+- `frontend/src/components/ProtectedRoute.tsx` - Added `requireSuperuser` prop
+- `frontend/src/components/Layout.tsx` - Added "Super Admin" nav item for superusers
+- `frontend/src/context/AuthContext.tsx` - Added impersonation state management
+- `frontend/src/App.tsx` - Added `/admin` route and `ImpersonationBanner`
+
+**Creating a Super Admin**:
+To make a user a super admin, update the database directly:
+```sql
+UPDATE users SET is_superuser = TRUE WHERE email = 'admin@example.com';
+```
+
+**Usage**:
+1. Log in as a super admin user
+2. Navigate to "Super Admin" in the sidebar
+3. View system statistics and tenant list
+4. Use filters to find specific tenants
+5. Click actions menu to change status or plan
+6. Use "User Search" tab to find and impersonate users
+7. Click impersonate icon next to user to start session
+8. Click "End Impersonation" in top banner to return to admin account
+
+---
+
 ## Feature Backlog
+
+### Manual Processes (No Automation Yet)
+
+#### Email & User Invitation System
+**Status**: Partial - User Management Implemented, Email Pending
+**Priority**: Low (email automation will come later)
+
+**Current Implementation** (as of 2025-01-15):
+- Admin users can manage users via `/users` page (admin-only)
+- Users can be added with email, first/last name, and role (admin/editor/viewer)
+- New users are created with default password: `Welcome123`
+- Admins can change user roles, activate/deactivate, and delete users
+- Self-protection: cannot change own role, deactivate, or delete self
+
+**What's NOT Implemented Yet**:
+- No automated email sending for invitations
+- No password reset via email
+- No email verification flow
+- No notification emails for job completions, alerts, etc.
+
+**Future Implementation**:
+- Email service integration (SendGrid, AWS SES, or similar)
+- User invitation flow with email containing secure invite link
+- Password reset via email
+- Email verification for new accounts
+- Notification emails for job completions, alerts, etc.
+
+**Why Email Is Manual For Now**:
+- Focus on core product functionality first
+- Email infrastructure adds complexity and cost
+- Manual password communication works for initial customer onboarding
+- Users should change password on first login (recommended but not enforced)
+
+---
 
 ### High Priority
 

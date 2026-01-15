@@ -55,9 +55,13 @@ export interface User {
   id: string;
   tenant_id: string;
   email: string;
+  first_name?: string;
+  last_name?: string;
   full_name?: string;
+  role: 'admin' | 'editor' | 'viewer';
   is_active: boolean;
-  is_superuser: boolean;
+  is_superuser?: boolean;
+  last_login?: string;
   created_at: string;
   updated_at: string;
 }

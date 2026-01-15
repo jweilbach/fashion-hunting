@@ -104,9 +104,13 @@ describe('authApi', () => {
         data: {
           id: 'user-123',
           email: 'user@example.com',
+          first_name: 'Test',
+          last_name: 'User',
+          full_name: 'Test User',
           role: 'admin',
           tenant_id: 'tenant-456',
           tenant_name: 'Test Tenant',
+          created_at: '2025-01-01T00:00:00Z',
         },
       }
       vi.mocked(apiClient.get).mockResolvedValue(mockResponse)
@@ -115,6 +119,8 @@ describe('authApi', () => {
 
       expect(apiClient.get).toHaveBeenCalledWith('/api/v1/auth/me')
       expect(result.email).toBe('user@example.com')
+      expect(result.first_name).toBe('Test')
+      expect(result.last_name).toBe('User')
       expect(result.role).toBe('admin')
       expect(result.tenant_id).toBe('tenant-456')
     })
