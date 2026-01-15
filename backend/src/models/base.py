@@ -74,7 +74,7 @@ def init_db():
     """
     Initialize database by running the full schema.sql file!
     This creates all tables, views, triggers, functions, and indexes.
-    Only runs if the 'tenants' table doesn't exist (first-time setup).
+    Only runs if the 'tenants' table doesn't exist (first-time setup)!
     After initial setup, also checks for any missing tables from new models.
     """
     # Check if database is already initialized by looking for the tenants table
