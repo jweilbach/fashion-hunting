@@ -26,18 +26,18 @@ describe('analyticsApi', () => {
         data: {
           total_reports: 1500,
           total_brands: 250,
-          reports_by_sentiment: {
-            positive: 600,
-            neutral: 500,
-            negative: 400,
-          },
-          reports_by_provider: {
-            Instagram: 500,
-            TikTok: 400,
-            YouTube: 350,
-            RSS: 250,
-          },
-          recent_activity: [],
+          active_feeds: 10,
+          sentiment_distribution: [
+            { sentiment: 'positive', count: 600, percentage: 40 },
+            { sentiment: 'neutral', count: 500, percentage: 33 },
+            { sentiment: 'negative', count: 400, percentage: 27 },
+          ],
+          top_sources: [
+            { source: 'Instagram', count: 500 },
+            { source: 'TikTok', count: 400 },
+          ],
+          topic_distribution: [],
+          recent_reports: [],
         },
       }
       vi.mocked(apiClient.get).mockResolvedValue(mockResponse)
@@ -47,7 +47,7 @@ describe('analyticsApi', () => {
       expect(apiClient.get).toHaveBeenCalledWith('/api/v1/public/overview')
       expect(result.total_reports).toBe(1500)
       expect(result.total_brands).toBe(250)
-      expect(result.reports_by_sentiment.positive).toBe(600)
+      expect(result.sentiment_distribution[0].count).toBe(600)
     })
 
     it('should propagate API errors', async () => {
