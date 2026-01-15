@@ -144,12 +144,21 @@ python database/init_db.py
 ```
 
 This will:
-- Create the `abmc_reports` database
-- Run the schema.sql file to create all tables
+- Create the `abmc_reports` database (skipped if exists)
+- Run the schema.sql file to create all tables (skipped if core tables exist)
+- Create the Lavacake tenant and superuser account
 - Create indexes, triggers, and views
-- Insert sample data
+- Insert sample data (ABMC Demo tenant)
 
-Expected output:
+**Note:** The script is idempotent - running it multiple times is safe. It checks for existing tables and only applies changes if needed.
+
+**Default Superuser Account:**
+- **Email**: weilbach@gmail.com
+- **Password**: Welcome123
+- **Tenant**: Lavacake (enterprise plan)
+- **Role**: admin with superuser privileges
+
+Expected output (fresh database):
 ```
 ============================================================
 ABMC Phase 1 - Database Initialization
@@ -173,17 +182,37 @@ Created 12 tables:
   - lists
   - list_items
 
+Created tenant 'Lavacake' (id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+Created superuser 'weilbach@gmail.com' with password 'Welcome123'
+
 ============================================================
 Database Verification
 ============================================================
-Tenants: 1
+Tenants: 2
 Views: 4
 Extensions: uuid-ossp, pgcrypto
+Superusers: 1
 ============================================================
 
 Sample tenant: ABMC Demo (abmc-demo) - demo@alisonbrod.com
 
+Superuser accounts:
+  - weilbach@gmail.com (Justin Weilbach) - Lavacake
+
 ✓ Database initialization completed successfully!
+```
+
+Expected output (existing database):
+```
+============================================================
+ABMC Phase 1 - Database Initialization
+============================================================
+Database 'abmc_reports' already exists
+Core tables already exist, skipping schema initialization
+(Run migrations to apply incremental changes)
+Tenant 'Lavacake' already exists (id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+Superuser 'weilbach@gmail.com' already exists and has superuser privileges
+...
 ```
 
 ### 5. Running Migrations (Existing Databases)
@@ -207,6 +236,8 @@ psql -h localhost -U postgres -d abmc_reports -f backend/migrations/split_full_n
 | `add_source_type_to_reports.sql` | Adds source_type column to reports |
 | `backfill_source_type.sql` | Backfills source_type data for existing reports |
 | `add_brands_gin_index.sql` | Adds GIN index for brand array searches |
+| `add_superuser_field.sql` | Adds is_superuser boolean column to users table |
+| `make_justin_superuser.sql` | Sets weilbach@gmail.com as superuser in Lavacake tenant |
 
 **For Railway deployments**, run migrations via Railway's database shell or connect remotely:
 ```bash
@@ -389,7 +420,7 @@ The database includes the following tables:
 | **scheduled_jobs** | Automated task scheduling with cron expressions |
 | **job_executions** | Job execution history and progress tracking |
 | **brand_configs** | Brand tracking, aliases, and filtering rules |
-| **users** | User accounts with RBAC (first_name, last_name, role) |
+| **users** | User accounts with RBAC (first_name, last_name, role, is_superuser) |
 | **analytics_cache** | Cached dashboard metrics with TTL |
 | **audit_logs** | Security and compliance audit trail |
 | **lists** | User-created lists for organizing reports |

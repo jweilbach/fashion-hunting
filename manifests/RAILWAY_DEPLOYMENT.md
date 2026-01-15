@@ -162,15 +162,29 @@ Or set up the migration as a one-time job.
 
 ---
 
-## Step 9: Create Initial Tenant & Admin User
+## Step 9: Initialize Database & Create Superuser
 
-After migrations, you need to seed initial data. You can either:
+After migrations, run the database initialization script to create the schema, sample data, and superuser account:
 
-**Option A**: Run via Railway shell
+**Option A**: Run via Railway shell (Recommended)
 1. Backend service → **Connect** → **Shell**
-2. Run a Python script to create tenant/user
+2. Run the initialization script:
+   ```bash
+   cd /app && python database/init_db.py
+   ```
 
-**Option B**: Create an init script in your backend that runs on first startup
+This will automatically:
+- Create all database tables (if not exists)
+- Create the **Lavacake** tenant (enterprise plan)
+- Create the superuser account:
+  - **Email**: weilbach@gmail.com
+  - **Password**: Welcome123
+  - **Role**: admin with superuser privileges
+- Create sample data (ABMC Demo tenant)
+
+**Option B**: Use Railway's one-time job feature to run `python database/init_db.py`
+
+**Note**: The init script is idempotent - safe to run multiple times. It skips existing resources.
 
 ---
 

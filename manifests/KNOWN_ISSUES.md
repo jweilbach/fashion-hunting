@@ -1012,7 +1012,15 @@ CREATE INDEX IF NOT EXISTS idx_users_superuser ON users(is_superuser) WHERE is_s
 - `frontend/src/App.tsx` - Added `/admin` route and `ImpersonationBanner`
 
 **Creating a Super Admin**:
-To make a user a super admin, update the database directly:
+
+*Option 1: Automatic (via init_db.py)*
+When running `python database/init_db.py`, a default superuser is automatically created:
+- **Email**: weilbach@gmail.com
+- **Password**: Welcome123
+- **Tenant**: Lavacake (enterprise plan)
+
+*Option 2: Manual (database update)*
+To make an existing user a super admin:
 ```sql
 UPDATE users SET is_superuser = TRUE WHERE email = 'admin@example.com';
 ```
