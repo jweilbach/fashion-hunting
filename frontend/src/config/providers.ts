@@ -79,9 +79,9 @@ export const PROVIDER_CATEGORIES: ProviderCategory[] = [
     providers: [
       {
         id: 'GOOGLE_SEARCH',
-        label: 'Google News',
+        label: 'Google Search',
         icon: NewsIcon,
-        route: 'google-news',
+        route: 'google-search',
       },
       {
         id: 'RSS',

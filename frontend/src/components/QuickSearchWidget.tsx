@@ -58,7 +58,7 @@ const QuickSearchWidget: React.FC<QuickSearchWidgetProps> = ({ onSearchComplete 
     { value: 'INSTAGRAM', label: 'Instagram', defaultType: 'hashtag' },
     { value: 'TIKTOK', label: 'TikTok', defaultType: 'hashtag' },
     { value: 'YOUTUBE', label: 'YouTube', defaultType: 'search' },
-    { value: 'GOOGLE_SEARCH', label: 'Google News', defaultType: 'search' },
+    { value: 'GOOGLE_SEARCH', label: 'Google Search', defaultType: 'search' },
     { value: 'RSS', label: 'RSS Feed', defaultType: 'url' },
   ];
 
