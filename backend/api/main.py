@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from api.config import settings
 from api.logging_config import setup_logging, get_logger
 from api.routers import auth, reports, brands, feeds, analytics, public, jobs, quick_search, lists, users, admin
-from src.models import init_db
+from src.bootstrap import run_bootstrap
 
 # Setup logging
 log_level = os.getenv("LOG_LEVEL", "INFO")
@@ -129,13 +129,13 @@ async def startup_event():
     logger.info(f"📝 Environment: {settings.ENV}")
     logger.info(f"📚 API Docs: http://{settings.API_HOST}:{settings.API_PORT}/docs")
 
-    # Initialize database tables (creates tables if they don't exist)
-    logger.info("🗄️ Initializing database tables...")
+    # Run server bootstrap (database tables, superuser, etc.)
+    logger.info("🗄️ Running server bootstrap...")
     try:
-        init_db()
-        logger.info("✅ Database tables initialized successfully")
+        run_bootstrap()
+        logger.info("✅ Server bootstrap complete")
     except Exception as e:
-        logger.error(f"❌ Failed to initialize database tables: {e}")
+        logger.error(f"❌ Bootstrap failed: {e}")
 
 
 # Shutdown event
