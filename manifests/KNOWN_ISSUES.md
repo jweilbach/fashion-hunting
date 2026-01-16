@@ -1560,6 +1560,151 @@ Could potentially add keyword search by:
 
 ---
 
+### 11. Profile + Brand Combination Tracking Not Supported
+**Status**: Open
+**Priority**: Medium
+**Date Identified**: 2026-01-16
+
+**Description**:
+Currently, we can track specific profiles OR search for brand mentions, but we cannot combine these to track when a specific influencer/person mentions a particular brand. This is a common use case in media monitoring:
+
+- "Track when @fashionista mentions Nike"
+- "Track when @techreview mentions Apple products"
+- "Find all posts where @influencer talks about Lululemon"
+
+**Current Limitation**:
+- **Profile search**: Returns ALL posts from a user (regardless of content)
+- **Hashtag/keyword search**: Returns posts from ANYONE using that hashtag/keyword
+- **Mentions search**: Searches for brand mentions across the platform
+
+There's no way to create a combined query like: "Posts from @username that mention BrandX"
+
+**Use Cases Blocked**:
+1. Tracking influencer partnerships with specific brands
+2. Monitoring competitor brand mentions by specific journalists/editors
+3. Finding when key opinion leaders mention your brand vs competitors
+4. Tracking ambassador/partnership performance
+
+**Proposed Solution**:
+Add a "combination" search type that:
+1. Fetches posts from a specific profile
+2. Filters locally for brand mentions in caption/hashtags
+3. Only saves/reports items matching both criteria
+
+**Implementation Approach**:
+```python
+# Pseudo-code for combination search
+class CombinationSearch:
+    def __init__(self, profile: str, brand: str):
+        self.profile = profile
+        self.brand = brand
+
+    def fetch(self):
+        # Fetch all posts from profile
+        posts = scraper.scrape_profile(self.profile)
+        # Filter for brand mentions
+        return [p for p in posts if self.brand.lower() in p['caption'].lower()]
+```
+
+**Provider-Specific Considerations**:
+- **Instagram**: Profile + hashtag/brand in caption
+- **TikTok**: User + keyword/hashtag in description
+- **YouTube**: Channel + search term in title/description
+
+**Workaround**:
+1. Set up profile tracking feed
+2. Manually filter reports by brand in the Reports page
+3. Use the search feature to find specific brand mentions within profile content
+
+**Related**:
+- Brand 360 feature (social profile tracking)
+- Job feed configuration
+- Report filtering
+
+---
+
+### 12. No Duplicate Detection Visibility in UI
+**Status**: Open
+**Priority**: Medium
+**Date Identified**: 2026-01-16
+
+**Description**:
+When a job fetches items, some may be duplicates of existing reports (detected via SHA256 hash). Currently, duplicates are silently skipped with no visibility to the user. This causes confusion when:
+
+- Job shows "Processing 30/30 items" but only 25 reports are created
+- User expects X reports but sees fewer in the Reports page
+- No explanation of why the numbers don't match
+
+**Current Behavior**:
+```
+Processing item 21/30: SHOULDER BAG Lululemon...
+Skipping duplicate item - already exists in database
+Successfully processed item 21
+```
+- The "Skipping duplicate" message only appears in server logs
+- UI shows successful processing with no indication of the skip
+- Final report count is lower than items processed
+
+**User Confusion**:
+- "I fetched 30 items, why do I only have 25 reports?"
+- "Is there a bug? The numbers don't add up"
+- "Did some items fail to process?"
+
+**Proposed Solution**:
+
+1. **Job Progress UI Enhancement**:
+   - Show duplicate count alongside new items: "25 new, 5 duplicates"
+   - Add a tooltip explaining deduplication
+   - Update progress bar to reflect actual new items
+
+2. **Job Execution Summary**:
+   - Add `duplicates_skipped` field to job execution response
+   - Display in History page: "Fetched 30 | New: 25 | Duplicates: 5"
+   - Add visual indicator (icon or badge) for skipped duplicates
+
+3. **Real-time Notifications**:
+   - Show toast/snackbar when duplicates are detected
+   - "5 duplicate items skipped - already in database"
+
+**Implementation Details**:
+
+Backend changes needed:
+```python
+# In job_execution_service.py - track duplicates
+execution_stats = {
+    'items_fetched': 30,
+    'items_new': 25,
+    'items_duplicate': 5,
+    'items_failed': 0
+}
+
+# Add to job_executions table or execution response
+```
+
+Frontend changes needed:
+```typescript
+// In job progress component
+<Typography>
+  Processing: {processed}/{total}
+  ({newItems} new, {duplicates} duplicates)
+</Typography>
+```
+
+**Why Duplicates Happen**:
+1. **Multiple feeds with overlapping results**: Hashtag #lululemon and #fashion may both return same post
+2. **Re-running jobs**: Same content appears in new API results
+3. **Cross-platform duplicates**: Same content shared across platforms (less common)
+
+**Workaround**:
+Check server logs for "Skipping duplicate" messages to understand the discrepancy.
+
+**Related**:
+- Report deduplication via SHA256 hash
+- Job execution progress tracking
+- History page
+
+---
+
 ## Infrastructure & DevOps
 
 ### 1. Deployment Automation
@@ -2737,4 +2882,4 @@ The following deprecation warnings appear during test runs. These are non-breaki
 
 ---
 
-*Last Updated: 2025-01-14*
+*Last Updated: 2026-01-16*

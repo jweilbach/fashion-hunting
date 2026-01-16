@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Typography,
   Box,
@@ -16,6 +16,10 @@ import {
   Alert,
   Switch,
   FormControlLabel,
+  Divider,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
   alpha,
   useTheme,
   Avatar,
@@ -29,11 +33,14 @@ import {
   CheckCircle as KnownIcon,
   Warning as UnknownIcon,
   BlockOutlined as IgnoredIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { brandsApi } from '../api/brands';
+import { providersApi } from '../api/providers';
 import { motion } from 'framer-motion';
-import type { Brand as ApiBrand } from '../types';
+import type { Brand as ApiBrand, ProviderConfig, SocialProfiles, ProviderMetadata } from '../types';
+import ProviderCard from '../components/ProviderCard';
 
 const MotionCard = motion.create(Card);
 const MotionBox = motion.create(Box);
@@ -45,6 +52,21 @@ interface BrandWithExtras extends ApiBrand {
 }
 
 type Brand = BrandWithExtras;
+
+// Default empty provider config
+const getDefaultProviderConfig = (): ProviderConfig => ({
+  enabled: false,
+  searches: [],
+});
+
+// Default empty social profiles
+const getDefaultSocialProfiles = (): SocialProfiles => ({
+  instagram: getDefaultProviderConfig(),
+  tiktok: getDefaultProviderConfig(),
+  youtube: getDefaultProviderConfig(),
+  google_news: getDefaultProviderConfig(),
+  google_search: getDefaultProviderConfig(),
+});
 
 const Brands: React.FC = () => {
   const theme = useTheme();
@@ -58,12 +80,19 @@ const Brands: React.FC = () => {
     category: 'client',
     notes: '',
   });
+  const [socialProfiles, setSocialProfiles] = useState<SocialProfiles>(getDefaultSocialProfiles());
 
   const queryClient = useQueryClient();
 
   const { data: brands, isLoading, error } = useQuery({
     queryKey: ['brands'],
     queryFn: () => brandsApi.getBrands(),
+  });
+
+  // Fetch provider metadata for the ProviderCards
+  const { data: providerMetadata } = useQuery({
+    queryKey: ['providerMetadata'],
+    queryFn: () => providersApi.getAllProviderMetadata(),
   });
 
   const createMutation = useMutation({
@@ -101,6 +130,8 @@ const Brands: React.FC = () => {
         category: brand.category || 'client',
         notes: brand.notes || '',
       });
+      // Load existing social profiles from brand data
+      setSocialProfiles(brand.social_profiles || getDefaultSocialProfiles());
     } else {
       setEditingBrand(null);
       setFormData({
@@ -111,6 +142,7 @@ const Brands: React.FC = () => {
         category: 'client',
         notes: '',
       });
+      setSocialProfiles(getDefaultSocialProfiles());
     }
     setOpen(true);
   };
@@ -118,6 +150,15 @@ const Brands: React.FC = () => {
   const handleClose = () => {
     setOpen(false);
     setEditingBrand(null);
+    setSocialProfiles(getDefaultSocialProfiles());
+  };
+
+  // Handle provider config changes from ProviderCard components
+  const handleProviderConfigChange = (providerName: string, config: ProviderConfig) => {
+    setSocialProfiles(prev => ({
+      ...prev,
+      [providerName]: config,
+    }));
   };
 
   const handleSubmit = () => {
@@ -128,6 +169,7 @@ const Brands: React.FC = () => {
       should_ignore: formData.should_ignore,
       category: formData.category,
       notes: formData.notes,
+      social_profiles: socialProfiles,
     };
 
     if (editingBrand) {
@@ -359,7 +401,7 @@ const Brands: React.FC = () => {
       <Dialog
         open={open}
         onClose={handleClose}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
         slotProps={{
           paper: {
@@ -434,6 +476,83 @@ const Brands: React.FC = () => {
               label="Ignore in Reports"
             />
           </Box>
+
+          {/* Social Profiles Section */}
+          <Divider sx={{ my: 3 }} />
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+            Social Profiles
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Configure tracking for each platform. Add searches to monitor hashtags, profiles, and keywords.
+          </Typography>
+
+          {providerMetadata && providerMetadata.length > 0 ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {providerMetadata.map((provider) => {
+                const providerKey = provider.name.toLowerCase() as keyof SocialProfiles;
+                const config = socialProfiles[providerKey] || getDefaultProviderConfig();
+                return (
+                  <Accordion
+                    key={provider.name}
+                    defaultExpanded={config.enabled}
+                    sx={{
+                      '&:before': { display: 'none' },
+                      boxShadow: 'none',
+                      border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+                      borderRadius: '8px !important',
+                      '&:not(:last-child)': { mb: 0 },
+                    }}
+                  >
+                    <AccordionSummary
+                      expandIcon={<ExpandMoreIcon />}
+                      sx={{
+                        minHeight: 56,
+                        '& .MuiAccordionSummary-content': {
+                          alignItems: 'center',
+                        },
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+                        <Typography sx={{ fontWeight: 500 }}>
+                          {provider.display_name}
+                        </Typography>
+                        {config.enabled && (
+                          <Chip
+                            label="Enabled"
+                            size="small"
+                            color="success"
+                            sx={{ ml: 1 }}
+                          />
+                        )}
+                        {config.searches.length > 0 && (
+                          <Chip
+                            label={`${config.searches.length} search${config.searches.length !== 1 ? 'es' : ''}`}
+                            size="small"
+                            variant="outlined"
+                          />
+                        )}
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <ProviderCard
+                        provider={provider}
+                        config={config}
+                        onChange={(newConfig) => handleProviderConfigChange(providerKey, newConfig)}
+                        defaultSearchCount={5}
+                      />
+                    </AccordionDetails>
+                  </Accordion>
+                );
+              })}
+            </Box>
+          ) : (
+            <Box sx={{ textAlign: 'center', py: 2 }}>
+              <CircularProgress size={24} />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Loading providers...
+              </Typography>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions sx={{ p: 3, pt: 2 }}>
           <Button onClick={handleClose} size="large">

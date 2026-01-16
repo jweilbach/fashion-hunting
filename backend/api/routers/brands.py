@@ -16,7 +16,9 @@ from api.database import get_db
 from api import schemas
 from api.auth import get_current_user, require_viewer, require_editor, require_admin
 from models.user import User
+from models.feed import FeedConfig
 from repositories.brand_repository import BrandRepository
+from services.brand_feed_generator import BrandFeedGenerator
 
 router = APIRouter()
 
@@ -99,6 +101,7 @@ async def create_brand(
     - **should_ignore**: Whether to ignore this brand in reports
     - **category**: Category (client, competitor, industry)
     - **notes**: Additional notes about the brand
+    - **social_profiles**: Social media profile configuration (Brand 360)
     """
     repo = BrandRepository(db)
 
@@ -118,8 +121,14 @@ async def create_brand(
         is_known_brand=brand_data.is_known_brand,
         should_ignore=brand_data.should_ignore,
         category=brand_data.category,
-        notes=brand_data.notes
+        notes=brand_data.notes,
+        social_profiles=brand_data.social_profiles.model_dump() if brand_data.social_profiles else {}
     )
+
+    # Auto-generate feeds from social profiles (Brand 360)
+    if brand_data.social_profiles:
+        feed_generator = BrandFeedGenerator(db)
+        feed_generator.generate_feeds_for_brand(brand)
 
     return schemas.BrandConfig.model_validate(brand)
 
@@ -151,9 +160,90 @@ async def update_brand(
 
     # Update fields
     update_data = brand_update.model_dump(exclude_unset=True)
+
+    # Check if social_profiles is being updated
+    social_profiles_changed = 'social_profiles' in update_data and update_data['social_profiles'] is not None
+
     updated_brand = repo.update(brand_id, **update_data)
 
+    # Regenerate feeds if social_profiles changed
+    if social_profiles_changed:
+        feed_generator = BrandFeedGenerator(db)
+        feed_generator.regenerate_feeds_for_brand(updated_brand)
+
     return schemas.BrandConfig.model_validate(updated_brand)
+
+
+@router.get("/{brand_id}/feeds", response_model=List[schemas.FeedConfig])
+async def get_brand_feeds(
+    brand_id: UUID,
+    auto_generated_only: bool = Query(False, description="Only return auto-generated feeds"),
+    current_user: User = Depends(require_viewer),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all feeds linked to a brand (Brand 360).
+
+    - **auto_generated_only**: Only return auto-generated feeds
+    """
+    repo = BrandRepository(db)
+    brand = repo.get_by_id(brand_id)
+
+    if not brand:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Brand not found"
+        )
+
+    # Verify tenant access
+    if brand.tenant_id != current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    # Query feeds linked to this brand
+    query = db.query(FeedConfig).filter(FeedConfig.brand_id == brand_id)
+    if auto_generated_only:
+        query = query.filter(FeedConfig.is_auto_generated == True)
+
+    feeds = query.all()
+    return [schemas.FeedConfig.model_validate(f) for f in feeds]
+
+
+@router.post("/{brand_id}/regenerate-feeds", response_model=List[schemas.FeedConfig])
+async def regenerate_brand_feeds(
+    brand_id: UUID,
+    current_user: User = Depends(require_editor),
+    db: Session = Depends(get_db)
+):
+    """
+    Regenerate all auto-generated feeds for a brand (Brand 360).
+
+    Deletes existing auto-generated feeds and creates new ones based on
+    the brand's current social_profiles configuration.
+    """
+    repo = BrandRepository(db)
+    brand = repo.get_by_id(brand_id)
+
+    if not brand:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Brand not found"
+        )
+
+    # Verify tenant access
+    if brand.tenant_id != current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    # Regenerate feeds
+    feed_generator = BrandFeedGenerator(db)
+    feeds = feed_generator.regenerate_feeds_for_brand(brand)
+
+    return [schemas.FeedConfig.model_validate(f) for f in feeds]
 
 
 @router.delete("/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -238,6 +238,11 @@ psql -h localhost -U postgres -d abmc_reports -f backend/migrations/split_full_n
 | `add_brands_gin_index.sql` | Adds GIN index for brand array searches |
 | `add_superuser_field.sql` | Adds is_superuser boolean column to users table |
 | `make_justin_superuser.sql` | Sets weilbach@gmail.com as superuser in Lavacake tenant |
+| **Brand 360 Migrations:** | |
+| `add_brand_social_profiles.sql` | Adds `social_profiles` JSONB column to brand_configs for social media tracking |
+| `add_feed_brand_linkage.sql` | Adds `brand_id` and `is_auto_generated` columns to feed_configs |
+| `add_job_generate_summary.sql` | Adds `generate_summary` boolean to scheduled_jobs |
+| `create_summaries_table.sql` | Creates summaries table for AI-generated PDF reports |
 
 **For Railway deployments**, run migrations via Railway's database shell or connect remotely:
 ```bash
@@ -419,7 +424,8 @@ The database includes the following tables:
 | **feed_configs** | RSS/TikTok/Instagram feed configurations |
 | **scheduled_jobs** | Automated task scheduling with cron expressions |
 | **job_executions** | Job execution history and progress tracking |
-| **brand_configs** | Brand tracking, aliases, and filtering rules |
+| **brand_configs** | Brand tracking, aliases, social profiles (Brand 360), and filtering rules |
+| **summaries** | AI-generated PDF summary documents stored in S3 |
 | **users** | User accounts with RBAC (first_name, last_name, role, is_superuser) |
 | **analytics_cache** | Cached dashboard metrics with TTL |
 | **audit_logs** | Security and compliance audit trail |

@@ -27,6 +27,10 @@ class FeedConfig(Base):
     fetch_count = Column(Integer, default=30)
     config = Column(JSONB, default=dict)
 
+    # Brand linkage (Brand 360)
+    brand_id = Column(UUID(as_uuid=True), ForeignKey('brand_configs.id', ondelete='SET NULL'), nullable=True, index=True)
+    is_auto_generated = Column(Boolean, default=False)  # True if created from brand social_profiles
+
     # Metadata
     label = Column(String(255))
     last_fetched = Column(DateTime(timezone=True))
@@ -40,6 +44,7 @@ class FeedConfig(Base):
 
     # Relationships
     tenant = relationship("Tenant", back_populates="feed_configs")
+    brand = relationship("BrandConfig", backref="feeds")
 
     def __repr__(self):
         return f"<FeedConfig(provider='{self.provider}', label='{self.label}', enabled={self.enabled})>"
@@ -55,6 +60,8 @@ class FeedConfig(Base):
             'enabled': self.enabled,
             'fetch_count': self.fetch_count,
             'config': self.config,
+            'brand_id': str(self.brand_id) if self.brand_id else None,
+            'is_auto_generated': self.is_auto_generated,
             'label': self.label,
             'last_fetched': self.last_fetched.isoformat() if self.last_fetched else None,
             'last_error': self.last_error,

@@ -110,3 +110,39 @@ class InstagramProvider(ContentProvider):
     def get_provider_name(self) -> str:
         """Return the name of this provider"""
         return ProviderType.INSTAGRAM
+
+    # ==========================================
+    # Brand 360 Extended Interface Methods
+    # ==========================================
+
+    @classmethod
+    def get_display_name(cls) -> str:
+        return "Instagram"
+
+    @classmethod
+    def get_search_types(cls) -> List[Dict]:
+        return [
+            {'value': 'profile', 'label': 'Profile'},
+            {'value': 'hashtag', 'label': 'Hashtag'},
+            {'value': 'mentions', 'label': 'Mentions'},
+        ]
+
+    @classmethod
+    def requires_handle(cls) -> bool:
+        return True
+
+    @classmethod
+    def get_handle_placeholder(cls) -> str:
+        return "@username"
+
+    @classmethod
+    def get_handle_label(cls) -> str:
+        return "Instagram Handle"
+
+    @classmethod
+    def is_social_media(cls) -> bool:
+        return True
+
+    @classmethod
+    def get_provider_type_value(cls) -> str:
+        return ProviderType.INSTAGRAM

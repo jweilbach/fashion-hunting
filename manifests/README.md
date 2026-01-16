@@ -8,7 +8,7 @@ Marketing Hunting is a comprehensive media tracking and brand monitoring platfor
 
 ## Features
 
-- **Multi-Source Feed Monitoring**: RSS feeds and Google Custom Search integration
+- **Multi-Source Feed Monitoring**: RSS feeds, Google Custom Search, Instagram, TikTok, YouTube
 - **AI-Powered Analysis**: Automatic brand extraction, sentiment analysis, and topic classification
 - **Real-Time Dashboard**: Live updates with auto-refresh during job execution
 - **Scheduled Jobs**: Configure automated feed fetching with Celery task queue
@@ -16,6 +16,8 @@ Marketing Hunting is a comprehensive media tracking and brand monitoring platfor
 - **Multi-Tenant Support**: Secure authentication with tenant isolation
 - **Progress Tracking**: Real-time job execution progress with detailed metrics
 - **Brand Analytics**: Track brand mentions, trends, and sentiment over time
+- **Brand 360**: Comprehensive brand tracking with auto-generated feeds from social profiles
+- **AI Summaries**: Generate PDF summary documents with AI-powered insights (stored in S3)
 
 ---
 
@@ -27,7 +29,9 @@ Marketing Hunting is a comprehensive media tracking and brand monitoring platfor
 - Redis (Celery broker and result backend)
 - Celery (distributed task queue with 2 concurrent workers)
 - OpenAI API (GPT-4o-mini for content analysis)
+- Gemini API (AI-powered summary generation)
 - Google Custom Search API (web-wide brand tracking)
+- AWS S3 (PDF summary storage)
 
 **Frontend**:
 - React 19 with TypeScript
@@ -58,9 +62,11 @@ cp .env.example .env
 
 # Edit .env with your credentials:
 # - OPENAI_API_KEY
+# - GEMINI_API_KEY (for AI summaries)
 # - POSTGRES_* settings
 # - REDIS_* settings
 # - GOOGLE_API_KEY (optional)
+# - AWS_* settings (for S3 summary storage)
 # - SECRET_KEY for JWT tokens
 ```
 
@@ -177,8 +183,9 @@ See [FEED_CONFIGURATION_GUIDE.md](FEED_CONFIGURATION_GUIDE.md) for detailed feed
 Key configuration options:
 
 ```bash
-# OpenAI API
+# AI APIs
 OPENAI_API_KEY=sk-proj-...
+GEMINI_API_KEY=AIza...
 
 # Database
 POSTGRES_HOST=localhost
@@ -200,6 +207,12 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 # Google Custom Search (optional)
 GOOGLE_API_KEY=AIza...
 GOOGLE_SEARCH_ENGINE_ID=665c214f...
+
+# S3 Storage (for PDF summaries)
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=...
+AWS_REGION=us-east-2
+S3_BUCKET_NAME=your-summaries-bucket
 
 # API
 API_HOST=0.0.0.0
@@ -432,7 +445,8 @@ psql -U postgres -d fashion_hunting -c "SELECT 1;"
 ## Additional Documentation
 
 - [DATABASE_SETUP.md](DATABASE_SETUP.md) - Database configuration and migrations
-- [FEED_CONFIGURATION_GUIDE.md](FEED_CONFIGURATION_GUIDE.md) - Feed types and examples
+- [FEED_CONFIGURATION_GUIDE.md](FEED_CONFIGURATION_GUIDE.md) - Feed types, examples, and Brand 360 auto-feeds
+- [BRAND_360_FEATURE.md](BRAND_360_FEATURE.md) - Brand 360 feature implementation details
 - [GOOGLE_SEARCH_SETUP.md](GOOGLE_SEARCH_SETUP.md) - Google API configuration
 - [OPTIMIZATION_AUDIT.md](OPTIMIZATION_AUDIT.md) - Performance tuning guide
 
@@ -445,10 +459,20 @@ psql -U postgres -d fashion_hunting -c "SELECT 1;"
 - **Typical usage**: ~1,000 tokens per article
 - **Estimate**: $0.0005-0.001 per article processed
 
+### Gemini API (for AI Summaries)
+- **Free tier**: Generous free quota for Gemini 1.5 Flash
+- **Used for**: Generating executive summaries in PDF reports
+- **Estimate**: Very low cost with Gemini 1.5 Flash
+
 ### Google Custom Search API
 - **Free tier**: 100 queries/day
 - **Paid tier**: $5 per 1,000 queries
 - **Estimate**: Use RSS feeds to minimize costs
+
+### AWS S3 (PDF Storage)
+- **Storage**: ~$0.023 per GB/month
+- **Typical PDF**: 50-200KB each
+- **Estimate**: Minimal cost for storage
 
 ---
 

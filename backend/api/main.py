@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from api.config import settings
 from api.logging_config import setup_logging, get_logger
-from api.routers import auth, reports, brands, feeds, analytics, public, jobs, quick_search, lists, users, admin
+from api.routers import auth, reports, brands, feeds, analytics, public, jobs, quick_search, lists, users, admin, providers, summaries
 from src.bootstrap import run_bootstrap
 
 # Setup logging
@@ -119,6 +119,8 @@ app.include_router(quick_search.router, prefix="/api/v1/quick-search", tags=["Qu
 app.include_router(lists.router, prefix="/api/v1/lists", tags=["Lists"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
+app.include_router(providers.router, prefix="/api/v1/providers", tags=["Providers"])
+app.include_router(summaries.router, prefix="/api/v1/summaries", tags=["Summaries"])
 
 
 # Startup event

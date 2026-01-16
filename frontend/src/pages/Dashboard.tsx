@@ -28,15 +28,18 @@ import {
   RssFeed as FeedIcon,
   Instagram as InstagramIcon,
   Article as ArticleIcon,
+  Summarize as SummarizeIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { analyticsApi } from '../api/analytics';
 import { reportsApi } from '../api/reports';
 import { brandsApi } from '../api/brands';
+import { summariesApi } from '../api/summaries';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { motion } from 'framer-motion';
 import { ReportColumn } from '../components/ReportColumn';
 import QuickSearchWidget from '../components/QuickSearchWidget';
+import SummaryList from '../components/SummaryList';
 
 const MotionCard = motion.create(Card);
 const MotionBox = motion.create(Box);
@@ -88,6 +91,13 @@ const Dashboard: React.FC = () => {
     queryKey: ['brands', 'top', brandsPageSize, brandsPage],
     queryFn: () => brandsApi.getTopBrands(brandsPageSize, (brandsPage - 1) * brandsPageSize),
     refetchInterval: hasRunningJobs ? 10000 : false, // Refresh every 10s when jobs running
+  });
+
+  // Fetch recent summaries
+  const { data: recentSummaries, isLoading: summariesLoading } = useQuery({
+    queryKey: ['summaries', 'recent'],
+    queryFn: () => summariesApi.getRecentSummaries(3),
+    refetchInterval: hasRunningJobs ? 10000 : false,
   });
 
   // Generate mock chart data from recent reports
@@ -146,6 +156,16 @@ const Dashboard: React.FC = () => {
   const handleDeleteSelected = () => {
     if (selectedReports.size > 0 && window.confirm(`Delete ${selectedReports.size} report(s)?`)) {
       deleteMutation.mutate(Array.from(selectedReports));
+    }
+  };
+
+  const handleSummaryDownload = async (summaryId: string) => {
+    try {
+      const summary = recentSummaries?.find(s => s.id === summaryId);
+      const filename = summary ? `${summary.title.replace(/[^a-z0-9]/gi, '_')}.pdf` : undefined;
+      await summariesApi.triggerSummaryDownload(summaryId, filename);
+    } catch (err) {
+      console.error('Failed to download summary:', err);
     }
   };
 
@@ -334,6 +354,31 @@ const Dashboard: React.FC = () => {
           queryClient.invalidateQueries({ queryKey: ['analytics'] });
         }} />
       </MotionBox>
+
+      {/* Recent Summaries */}
+      {(recentSummaries && recentSummaries.length > 0) && (
+        <MotionCard
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.37 }}
+          sx={{ mb: 4 }}
+        >
+          <CardContent sx={{ p: 3 }}>
+            <Box display="flex" alignItems="center" mb={2}>
+              <SummarizeIcon sx={{ mr: 1, color: theme.palette.error.main }} />
+              <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                Recent Summaries
+              </Typography>
+            </Box>
+            <SummaryList
+              summaries={recentSummaries}
+              compact
+              loading={summariesLoading}
+              onDownload={handleSummaryDownload}
+            />
+          </CardContent>
+        </MotionCard>
+      )}
 
       {/* Recent Reports */}
       <MotionCard

@@ -15,6 +15,7 @@ import History from './pages/History';
 import Reports from './pages/Reports';
 import Lists from './pages/Lists';
 import ListDetail from './pages/ListDetail';
+import Summaries from './pages/Summaries';
 import Profile from './pages/Profile';
 import UserManagement from './pages/UserManagement';
 import AdminDashboard from './pages/AdminDashboard';
@@ -131,6 +132,16 @@ function App() {
                   <ProtectedRoute>
                     <Layout>
                       <ListDetail />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/summaries"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Summaries />
                     </Layout>
                   </ProtectedRoute>
                 }

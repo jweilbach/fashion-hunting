@@ -93,3 +93,29 @@ class RSSProvider(ContentProvider):
     
     def get_provider_name(self) -> str:
         return "RSS"
+
+    # ==========================================
+    # Brand 360 Extended Interface Methods
+    # ==========================================
+
+    @classmethod
+    def get_display_name(cls) -> str:
+        return "Google News"
+
+    @classmethod
+    def get_search_types(cls) -> List[Dict]:
+        return [
+            {'value': 'rss_keyword', 'label': 'RSS Keyword'},
+        ]
+
+    @classmethod
+    def requires_handle(cls) -> bool:
+        return False
+
+    @classmethod
+    def is_social_media(cls) -> bool:
+        return False
+
+    @classmethod
+    def get_provider_type_value(cls) -> str:
+        return "RSS"

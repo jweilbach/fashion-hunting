@@ -6,6 +6,7 @@ export interface ScheduledJob {
   job_type: string;
   schedule_cron: string;
   enabled: boolean;
+  generate_summary?: boolean; // Brand 360 - whether to create AI summary after execution
   config: {
     name?: string;
     brand_ids?: string[];
@@ -25,6 +26,7 @@ export interface ScheduledJobCreate {
   job_type?: string;
   schedule_cron: string;
   enabled?: boolean;
+  generate_summary?: boolean;
   config: {
     name: string;
     brand_ids: string[];
@@ -36,6 +38,7 @@ export interface ScheduledJobCreate {
 export interface ScheduledJobUpdate {
   schedule_cron?: string;
   enabled?: boolean;
+  generate_summary?: boolean;
   config?: {
     name?: string;
     brand_ids?: string[];

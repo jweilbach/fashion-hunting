@@ -27,6 +27,7 @@ import {
   Assessment as ReportsIcon,
   History as HistoryIcon,
   PlaylistAddCheck as ListsIcon,
+  Summarize as SummariesIcon,
   LogoutOutlined as LogoutIcon,
   ChevronRight as ChevronRightIcon,
   ExpandMore as ExpandMoreIcon,
@@ -532,6 +533,49 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   slotProps={{
                     primary: {
                       fontWeight: location.pathname.startsWith('/lists') ? 600 : 500,
+                      fontSize: '0.95rem',
+                    },
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
+
+            {/* Summaries (Brand 360) */}
+            <ListItem disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton
+                selected={location.pathname === '/summaries'}
+                onClick={() => navigate('/summaries')}
+                sx={{
+                  borderRadius: 2,
+                  transition: 'all 0.3s ease',
+                  ...(location.pathname === '/summaries' && {
+                    background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.15)}, ${alpha(theme.palette.secondary.main, 0.15)})`,
+                    boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`,
+                    '&:hover': {
+                      background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.2)}, ${alpha(theme.palette.secondary.main, 0.2)})`,
+                    },
+                  }),
+                  ...(location.pathname !== '/summaries' && {
+                    '&:hover': {
+                      background: alpha(theme.palette.primary.main, 0.08),
+                      transform: 'translateX(4px)',
+                    },
+                  }),
+                }}
+              >
+                <ListItemIcon
+                  sx={{
+                    minWidth: 40,
+                    color: location.pathname === '/summaries' ? theme.palette.primary.main : theme.palette.text.secondary,
+                  }}
+                >
+                  <SummariesIcon />
+                </ListItemIcon>
+                <ListItemText
+                  primary="Summaries"
+                  slotProps={{
+                    primary: {
+                      fontWeight: location.pathname === '/summaries' ? 600 : 500,
                       fontSize: '0.95rem',
                     },
                   }}

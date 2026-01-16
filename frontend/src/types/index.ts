@@ -24,12 +24,73 @@ export interface Report {
   is_new?: boolean; // Computed by backend: true if created in last 24 hours
 }
 
+// ============================================================================
+// Brand 360 Types
+// ============================================================================
+
+/**
+ * Individual search entry for a provider
+ */
+export interface SearchEntry {
+  type: string; // Provider-specific: 'profile' | 'hashtag' | 'mentions' | 'user' | 'keyword' | 'channel' | 'search' | 'video' | 'rss_keyword'
+  value: string; // The search term/handle/hashtag (without # or @)
+  count: number; // Number of results to fetch (1-100, default from tenant settings)
+}
+
+/**
+ * Per-provider configuration for Brand 360
+ */
+export interface ProviderConfig {
+  enabled: boolean;
+  handle?: string; // Instagram/TikTok username
+  channel_id?: string; // YouTube channel ID (UCxxx)
+  channel_handle?: string; // YouTube @handle
+  searches: SearchEntry[];
+}
+
+/**
+ * Social profiles structure for brand configuration
+ */
+export interface SocialProfiles {
+  instagram?: ProviderConfig;
+  tiktok?: ProviderConfig;
+  youtube?: ProviderConfig;
+  google_news?: ProviderConfig;
+  google_search?: ProviderConfig;
+}
+
+/**
+ * Search type option (from backend providers)
+ */
+export interface SearchTypeOption {
+  value: string;
+  label: string;
+}
+
+/**
+ * Provider metadata (from backend registry)
+ */
+export interface ProviderMetadata {
+  name: string;
+  display_name: string;
+  search_types: SearchTypeOption[];
+  requires_handle: boolean;
+  handle_placeholder: string;
+  handle_label: string;
+  icon: string;
+  is_social_media: boolean;
+}
+
 export interface Brand {
   id: string;
   tenant_id: string;
   brand_name: string;
+  aliases?: string[];
   is_known_brand: boolean;
+  should_ignore?: boolean;
   category?: string;
+  notes?: string;
+  social_profiles?: SocialProfiles; // Brand 360
   mention_count: number;
   last_mentioned?: string;
   metadata?: Record<string, any>;
@@ -41,11 +102,22 @@ export interface Feed {
   id: string;
   tenant_id: string;
   provider: string;
+  feed_type?: string;
+  feed_value: string;
   feed_url?: string;
   search_query?: string;
-  is_enabled: boolean;
+  label?: string;
+  enabled: boolean;
+  is_enabled?: boolean; // Alias for backwards compatibility
+  fetch_count?: number;
+  config?: Record<string, any>;
+  brand_id?: string; // Brand 360 - FK to brand
+  is_auto_generated?: boolean; // Brand 360 - true if created from brand social_profiles
   fetch_frequency?: string;
   last_fetched?: string;
+  last_error?: string;
+  fetch_count_success?: number;
+  fetch_count_failed?: number;
   metadata?: Record<string, any>;
   created_at: string;
   updated_at: string;
@@ -193,4 +265,77 @@ export interface ListCreate {
 export interface ListUpdate {
   name?: string;
   description?: string;
+}
+
+// ============================================================================
+// Summary Types (Brand 360)
+// ============================================================================
+
+/**
+ * AI-generated PDF summary document
+ */
+export interface Summary {
+  id: string;
+  tenant_id: string;
+  job_id?: string;
+  execution_id?: string;
+  brand_ids: string[];
+  title: string;
+  executive_summary?: string;
+  period_start?: string;
+  period_end?: string;
+  file_path?: string;
+  file_size_bytes?: number;
+  report_count: number;
+  generation_status: 'pending' | 'generating' | 'completed' | 'failed';
+  generation_error?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SummaryListResponse {
+  items: Summary[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+}
+
+// ============================================================================
+// Job Types (updated for Brand 360)
+// ============================================================================
+
+export interface Job {
+  id: string;
+  tenant_id: string;
+  job_type: string;
+  schedule_cron: string;
+  enabled: boolean;
+  config: Record<string, any>;
+  generate_summary?: boolean; // Brand 360 - whether to create AI summary after execution
+  last_run?: string;
+  last_status?: string;
+  last_error?: string;
+  next_run?: string;
+  run_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JobExecution {
+  id: string;
+  job_id: string;
+  tenant_id: string;
+  started_at: string;
+  completed_at?: string;
+  status: 'running' | 'success' | 'failed' | 'partial';
+  items_processed: number;
+  items_failed: number;
+  error_message?: string;
+  execution_log?: string;
+  total_items: number;
+  current_item_index: number;
+  current_item_title?: string;
+  celery_task_id?: string;
+  created_at: string;
 }

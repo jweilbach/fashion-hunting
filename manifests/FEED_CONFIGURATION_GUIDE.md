@@ -4,11 +4,45 @@ This guide explains how to configure different feed types in Marketing Hunting t
 
 ## Overview
 
-Marketing Hunting supports two main feed providers:
+Marketing Hunting supports multiple feed providers:
 - **RSS Feeds**: Direct RSS feeds or keyword-based Google News searches
 - **Google Search**: Web-wide searches using Google Custom Search API
+- **Social Media**: Instagram, TikTok, YouTube via Apify integration
 
 Each provider has different feed types with specific use cases.
+
+---
+
+## Brand 360: Auto-Generated Feeds
+
+**New Feature**: When creating a brand with social media profiles configured, the system automatically generates comprehensive tracking feeds for that brand.
+
+### How It Works
+
+1. **Create a brand** with social profiles (Instagram handle, TikTok handle, YouTube channel)
+2. The system **automatically creates feeds** for:
+   - Instagram hashtag searches (brand name variations)
+   - Instagram profile monitoring
+   - TikTok hashtag/keyword searches
+   - TikTok profile monitoring
+   - YouTube searches
+   - YouTube channel monitoring
+   - Google News RSS feed
+
+3. **When creating a job**, selecting a brand automatically adds all its associated feeds
+
+### Benefits
+
+- **No manual feed setup** - feeds are auto-generated from brand profiles
+- **Comprehensive coverage** - all relevant search types created automatically
+- **Easy job creation** - select a brand and feeds are pre-populated
+- **Automatic updates** - changing brand social profiles regenerates feeds
+
+### Managing Auto-Generated Feeds
+
+- Auto-generated feeds are marked with `is_auto_generated: true`
+- Use the **Regenerate Feeds** button on a brand to recreate feeds after profile changes
+- You can still create manual feeds independently of brands
 
 ---
 

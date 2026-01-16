@@ -70,6 +70,7 @@ const Jobs: React.FC = () => {
     schedule_type: 'manual',
     custom_cron: '',
     enabled: true,
+    generate_summary: false, // Brand 360 - generate AI summary after execution
     // Advanced settings
     enable_html_brand_extraction: false,
     max_html_size_bytes: 500000,
@@ -166,6 +167,7 @@ const Jobs: React.FC = () => {
         schedule_type: scheduleType,
         custom_cron: scheduleType === 'custom' ? job.schedule_cron : '',
         enabled: job.enabled,
+        generate_summary: job.generate_summary || false,
         // Advanced settings
         enable_html_brand_extraction: job.config?.enable_html_brand_extraction || false,
         max_html_size_bytes: job.config?.max_html_size_bytes ?? 500000,
@@ -183,6 +185,7 @@ const Jobs: React.FC = () => {
         schedule_type: 'manual',
         custom_cron: '',
         enabled: true,
+        generate_summary: false,
         // Advanced settings defaults
         enable_html_brand_extraction: false,
         max_html_size_bytes: 500000,
@@ -200,11 +203,34 @@ const Jobs: React.FC = () => {
     setEditingJob(null);
   };
 
-  const handleBrandChange = (event: SelectChangeEvent<string[]>) => {
+  const handleBrandChange = async (event: SelectChangeEvent<string[]>) => {
     const value = event.target.value;
+    const newBrandIds = typeof value === 'string' ? value.split(',') : value;
+
+    // Find newly added brands (brands that weren't selected before)
+    const addedBrandIds = newBrandIds.filter(id => !formData.brand_ids.includes(id));
+
+    // Fetch feeds for newly added brands and add them to feed_ids
+    let newFeedIds = [...formData.feed_ids];
+    for (const brandId of addedBrandIds) {
+      try {
+        const brandFeeds = await brandsApi.getBrandFeeds(brandId);
+        const feedIds = brandFeeds.map(f => f.id);
+        // Add feed IDs that aren't already selected
+        feedIds.forEach(id => {
+          if (!newFeedIds.includes(id)) {
+            newFeedIds.push(id);
+          }
+        });
+      } catch (error) {
+        console.error(`Failed to fetch feeds for brand ${brandId}:`, error);
+      }
+    }
+
     setFormData({
       ...formData,
-      brand_ids: typeof value === 'string' ? value.split(',') : value,
+      brand_ids: newBrandIds,
+      feed_ids: newFeedIds,
     });
   };
 
@@ -236,6 +262,7 @@ const Jobs: React.FC = () => {
       job_type: 'monitor_feeds',
       schedule_cron: getScheduleCron(),
       enabled: formData.enabled,
+      generate_summary: formData.generate_summary,
       config: {
         name: formData.name,
         brand_ids: formData.brand_ids,
@@ -253,6 +280,7 @@ const Jobs: React.FC = () => {
       const updateData = {
         schedule_cron: getScheduleCron(),
         enabled: formData.enabled,
+        generate_summary: formData.generate_summary,
         config: {
           name: formData.name,
           brand_ids: formData.brand_ids,
@@ -492,6 +520,15 @@ const Jobs: React.FC = () => {
                           {job.last_status === 'running' && (
                             <CircularProgress size={16} thickness={4} />
                           )}
+                          {job.generate_summary && (
+                            <Chip
+                              label="AI Summary"
+                              size="small"
+                              color="secondary"
+                              variant="outlined"
+                              sx={{ fontWeight: 500 }}
+                            />
+                          )}
                         </Box>
 
                         <Stack direction="row" spacing={3} mb={1.5} flexWrap="wrap">
@@ -681,6 +718,9 @@ const Jobs: React.FC = () => {
               ))}
             </Select>
           </FormControl>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: -1, ml: 1.5 }}>
+            Selecting a brand will automatically add its configured feeds
+          </Typography>
 
           <FormControl fullWidth margin="normal" required>
             <InputLabel>Feeds to Monitor</InputLabel>
@@ -835,6 +875,22 @@ const Jobs: React.FC = () => {
             label="Enabled"
             sx={{ mt: 2 }}
           />
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Generate Summary Option (Brand 360) */}
+          <FormControlLabel
+            control={
+              <Switch
+                checked={formData.generate_summary}
+                onChange={(e) => setFormData({ ...formData, generate_summary: e.target.checked })}
+              />
+            }
+            label="Generate AI Summary Document"
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 6, mt: -1 }}>
+            Automatically create a PDF summary with AI-generated insights after this job completes
+          </Typography>
         </DialogContent>
         <DialogActions sx={{ p: 3, pt: 2 }}>
           <Button onClick={handleClose} size="large">

@@ -58,8 +58,9 @@ import {
   AutoAwesome as NewIcon,
   PlaylistAdd as AddToListIcon,
   PlaylistAddCheck as ListsIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { reportsApi, type ReportsQueryParams } from '../api/reports';
 import { brandsApi } from '../api/brands';
 import { listsApi } from '../api/lists';
@@ -351,6 +352,23 @@ const Reports: React.FC = () => {
     }
   };
 
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (reportIds: string[]) => {
+      return await reportsApi.bulkDeleteReports(reportIds);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
+      setSelectedReports(new Set());
+    },
+  });
+
+  const handleDeleteSelected = () => {
+    if (selectedReports.size > 0 && window.confirm(`Delete ${selectedReports.size} report(s)? This action cannot be undone.`)) {
+      deleteMutation.mutate(Array.from(selectedReports));
+    }
+  };
+
   // If no category selected, show a message
   if (!category) {
     return (
@@ -459,6 +477,16 @@ const Reports: React.FC = () => {
                 <MenuItem onClick={exportToCSV}>Export as CSV</MenuItem>
                 <MenuItem onClick={exportToExcel}>Export as Excel</MenuItem>
               </Menu>
+              <Button
+                variant="outlined"
+                size="small"
+                color="error"
+                startIcon={deleteMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteIcon />}
+                onClick={handleDeleteSelected}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              </Button>
             </Box>
           )}
         </Box>

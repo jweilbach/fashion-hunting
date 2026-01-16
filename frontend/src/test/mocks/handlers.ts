@@ -88,6 +88,10 @@ export const handlers = [
     })
   ),
 
+  ...createHandler('post', '/auth/logout', () =>
+    HttpResponse.json({ message: 'Logged out successfully' })
+  ),
+
   // ==================== Lists Endpoints ====================
 
   http.get(`${API_BASE}/lists/types/`, () => {

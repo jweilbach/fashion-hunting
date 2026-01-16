@@ -65,9 +65,16 @@ REDIS_PORT=${{Redis.REDISPORT}}
 
 # API Keys (add your own values)
 OPENAI_API_KEY=sk-your-openai-key
+GEMINI_API_KEY=your-gemini-api-key
 GOOGLE_API_KEY=your-google-api-key
 GOOGLE_SEARCH_ENGINE_ID=your-search-engine-id
 APIFY_API_TOKEN=your-apify-token
+
+# S3 Storage (for PDF summaries - Brand 360)
+AWS_ACCESS_KEY_ID=your-aws-access-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+AWS_REGION=us-east-2
+S3_BUCKET_NAME=your-summaries-bucket
 
 # Security
 SECRET_KEY=generate-a-secure-random-string-here
@@ -201,9 +208,14 @@ This will automatically:
 | `REDIS_HOST` | Redis host | `${{Redis.REDISHOST}}` |
 | `REDIS_PORT` | Redis port | `${{Redis.REDISPORT}}` |
 | `OPENAI_API_KEY` | OpenAI API key | `sk-...` |
+| `GEMINI_API_KEY` | Gemini API key (for summaries) | `AIza...` |
 | `GOOGLE_API_KEY` | Google API key | `AIza...` |
 | `GOOGLE_SEARCH_ENGINE_ID` | Google CSE ID | `665c...` |
 | `APIFY_API_TOKEN` | Apify token | `apify_api_...` |
+| `AWS_ACCESS_KEY_ID` | AWS access key (S3) | `AKIA...` |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret key (S3) | `...` |
+| `AWS_REGION` | AWS region | `us-east-2` |
+| `S3_BUCKET_NAME` | S3 bucket for summaries | `your-bucket` |
 | `SECRET_KEY` | JWT secret | Random 32+ char string |
 | `ENV` | Environment | `production` |
 | `DEBUG` | Debug mode | `false` |

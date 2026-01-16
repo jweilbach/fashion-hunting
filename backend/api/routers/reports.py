@@ -203,6 +203,38 @@ async def delete_report(
     return None
 
 
+@router.post("/bulk-delete", response_model=schemas.BulkDeleteResponse)
+async def bulk_delete_reports(
+    report_ids: List[str] = Query(..., description="List of report IDs to delete"),
+    current_user: User = Depends(require_editor),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete multiple reports at once (requires editor or admin role)
+
+    - **report_ids**: List of report IDs to delete
+    """
+    repo = ReportRepository(db)
+    deleted_count = 0
+    skipped_count = 0
+
+    for rid in report_ids:
+        try:
+            report = repo.get_by_id(UUID(rid))
+            if report and report.tenant_id == current_user.tenant_id:
+                repo.delete(UUID(rid))
+                deleted_count += 1
+            else:
+                skipped_count += 1
+        except ValueError:
+            skipped_count += 1  # Skip invalid UUIDs
+
+    return schemas.BulkDeleteResponse(
+        deleted_count=deleted_count,
+        skipped_count=skipped_count
+    )
+
+
 @router.post("/export")
 async def export_reports(
     format: str = Query("csv", description="Export format: csv or excel"),

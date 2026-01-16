@@ -458,6 +458,44 @@ class JobExecutionService:
             status=status
         )
 
+        # Generate summary if enabled (Brand 360 feature)
+        if job.generate_summary and items_processed > 0:
+            self._trigger_summary_generation(job, execution)
+
+    def _trigger_summary_generation(
+        self,
+        job: ScheduledJob,
+        execution: JobExecution
+    ) -> None:
+        """
+        Trigger AI summary generation for a completed job execution.
+
+        This is called after a job completes when generate_summary is enabled.
+        """
+        try:
+            from services.summary_service import SummaryService
+
+            logger.info(f"Generating summary for job {job.id}, execution {execution.id}")
+
+            # Get brand IDs from job config
+            config = job.config or {}
+            brand_ids = [UUID(bid) for bid in config.get('brand_ids', [])]
+
+            # Create summary service and generate
+            summary_service = SummaryService(self.db)
+            summary = summary_service.generate_summary_for_execution(
+                tenant_id=job.tenant_id,
+                job_id=job.id,
+                execution_id=execution.id,
+                brand_ids=brand_ids
+            )
+
+            logger.info(f"Summary generated: {summary.id} ({summary.report_count} reports)")
+
+        except Exception as e:
+            # Log error but don't fail the job execution
+            logger.error(f"Failed to generate summary for job {job.id}: {e}", exc_info=True)
+
     def _fail_execution(self, execution: JobExecution, error_message: str) -> None:
         """Mark execution as failed"""
         try:

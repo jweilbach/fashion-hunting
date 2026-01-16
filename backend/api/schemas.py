@@ -253,6 +253,8 @@ class FeedConfigUpdate(BaseModel):
 class FeedConfig(FeedConfigBase):
     id: UUID
     tenant_id: UUID
+    brand_id: Optional[UUID] = None  # FK to brand_configs - Brand 360
+    is_auto_generated: bool = False  # True if created from brand social_profiles
     last_fetched: Optional[datetime] = None
     last_error: Optional[str] = None
     fetch_count_success: int = 0
@@ -261,6 +263,35 @@ class FeedConfig(FeedConfigBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================================
+# Brand 360 - Social Profiles Schemas
+# ============================================================================
+
+class SearchEntry(BaseModel):
+    """Individual search entry for a provider"""
+    type: str  # Provider-specific: 'profile', 'hashtag', 'mentions', 'user', 'keyword', 'channel', 'search', 'video', 'rss_keyword'
+    value: str  # The search term/handle/hashtag (without # or @)
+    count: int = Field(default=5, ge=1, le=100)  # Number of results to fetch
+
+
+class ProviderConfig(BaseModel):
+    """Per-provider configuration for Brand 360"""
+    enabled: bool = False
+    handle: Optional[str] = None  # For Instagram/TikTok username
+    channel_id: Optional[str] = None  # For YouTube channel ID (UCxxx)
+    channel_handle: Optional[str] = None  # For YouTube @handle
+    searches: List[SearchEntry] = []
+
+
+class SocialProfiles(BaseModel):
+    """Social profiles structure for brand configuration"""
+    instagram: Optional[ProviderConfig] = None
+    tiktok: Optional[ProviderConfig] = None
+    youtube: Optional[ProviderConfig] = None
+    google_news: Optional[ProviderConfig] = None
+    google_search: Optional[ProviderConfig] = None
 
 
 # ============================================================================
@@ -274,6 +305,7 @@ class BrandConfigBase(BaseModel):
     should_ignore: bool = False
     category: Optional[str] = None  # client, competitor, industry
     notes: Optional[str] = None
+    social_profiles: Optional[SocialProfiles] = None
 
 
 class BrandConfigCreate(BrandConfigBase):
@@ -286,6 +318,7 @@ class BrandConfigUpdate(BaseModel):
     should_ignore: Optional[bool] = None
     category: Optional[str] = None
     notes: Optional[str] = None
+    social_profiles: Optional[SocialProfiles] = None
 
 
 class BrandConfig(BrandConfigBase):
@@ -308,6 +341,7 @@ class ScheduledJobBase(BaseModel):
     schedule_cron: str  # Cron expression (e.g., "0 9 * * *" for daily at 9am, "@manual" for manual only)
     enabled: bool = True
     config: Optional[Dict[str, Any]] = {}  # Contains: name, brand_ids[], feed_ids[]
+    generate_summary: bool = False  # Brand 360 - Whether to create AI summary after execution
 
 
 class ScheduledJobCreate(BaseModel):
@@ -315,12 +349,14 @@ class ScheduledJobCreate(BaseModel):
     schedule_cron: str  # Use "@manual" for manual-only tasks
     enabled: bool = True
     config: Dict[str, Any]  # Required: { name, brand_ids, feed_ids }
+    generate_summary: bool = False  # Brand 360
 
 
 class ScheduledJobUpdate(BaseModel):
     schedule_cron: Optional[str] = None
     enabled: Optional[bool] = None
     config: Optional[Dict[str, Any]] = None
+    generate_summary: Optional[bool] = None  # Brand 360
 
 
 class ScheduledJob(ScheduledJobBase):
@@ -358,6 +394,52 @@ class JobExecution(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================================
+# Summary Schemas (Brand 360)
+# ============================================================================
+
+class SummaryBase(BaseModel):
+    """Base summary schema"""
+    title: str
+    executive_summary: Optional[str] = None
+    period_start: Optional[datetime] = None
+    period_end: Optional[datetime] = None
+
+
+class SummaryCreate(SummaryBase):
+    """Schema for creating a summary (typically done by system after job completion)"""
+    job_id: Optional[UUID] = None
+    execution_id: Optional[UUID] = None
+    brand_ids: List[UUID] = []
+
+
+class Summary(SummaryBase):
+    """Full summary response schema"""
+    id: UUID
+    tenant_id: UUID
+    job_id: Optional[UUID] = None
+    execution_id: Optional[UUID] = None
+    brand_ids: List[UUID] = []
+    file_path: Optional[str] = None
+    file_size_bytes: Optional[int] = None
+    report_count: int = 0
+    generation_status: str = "pending"  # pending, generating, completed, failed
+    generation_error: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SummaryListResponse(BaseModel):
+    """Paginated list of summaries"""
+    items: List[Summary]
+    total: int
+    page: int
+    page_size: int
+    pages: int
 
 
 # ============================================================================
@@ -415,6 +497,11 @@ class ReportListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+class BulkDeleteResponse(BaseModel):
+    deleted_count: int
+    skipped_count: int
 
 
 class BrandListResponse(BaseModel):

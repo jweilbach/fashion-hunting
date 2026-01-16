@@ -2,7 +2,7 @@
 Brand Configuration model
 """
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Boolean, Integer, Index
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
@@ -28,6 +28,9 @@ class BrandConfig(Base):
     # Metadata
     category = Column(String(100))  # client, competitor, industry
     notes = Column(Text)
+
+    # Social media profiles configuration (Brand 360)
+    social_profiles = Column(JSONB, default=dict)  # Flexible per-provider config
 
     # Stats (denormalized for performance)
     mention_count = Column(Integer, default=0)
@@ -60,6 +63,7 @@ class BrandConfig(Base):
             'should_ignore': self.should_ignore,
             'category': self.category,
             'notes': self.notes,
+            'social_profiles': self.social_profiles or {},
             'mention_count': self.mention_count,
             'last_mentioned': self.last_mentioned.isoformat() if self.last_mentioned else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,

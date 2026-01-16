@@ -88,7 +88,16 @@ class ProviderFactory:
             queries = [q for q in queries if q]  # Filter out None values
 
             # Extract Google-specific config
-            results_per_query = config.get('results_per_query', 10) if config else 10
+            # Prioritize feed-level fetch_count over job-level results_per_query
+            # Use the first feed's fetch_count if available
+            feed_fetch_count = None
+            for fc in feed_configs:
+                fc_count = fc.get('count') or fc.get('fetch_count')
+                if fc_count:
+                    feed_fetch_count = int(fc_count)
+                    break
+
+            results_per_query = feed_fetch_count or (config.get('results_per_query', 10) if config else 10)
             date_restrict = config.get('date_restrict', 'd7') if config else 'd7'
 
             return provider_class(

@@ -96,6 +96,16 @@ export const reportsApi = {
     await apiClient.delete(`/api/v1/reports/${id}`);
   },
 
+  // Bulk delete multiple reports
+  bulkDeleteReports: async (reportIds: string[]): Promise<{ deleted_count: number; skipped_count: number }> => {
+    const searchParams = new URLSearchParams();
+    reportIds.forEach(id => searchParams.append('report_ids', id));
+    const response = await apiClient.post<{ deleted_count: number; skipped_count: number }>(
+      `/api/v1/reports/bulk-delete?${searchParams.toString()}`
+    );
+    return response.data;
+  },
+
   // Export reports to CSV or Excel
   exportReports: async (params: ExportParams): Promise<void> => {
     const searchParams = new URLSearchParams();

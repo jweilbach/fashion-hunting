@@ -214,3 +214,39 @@ class YouTubeProvider(ContentProvider):
 
     def get_provider_name(self) -> str:
         return ProviderType.YOUTUBE
+
+    # ==========================================
+    # Brand 360 Extended Interface Methods
+    # ==========================================
+
+    @classmethod
+    def get_display_name(cls) -> str:
+        return "YouTube"
+
+    @classmethod
+    def get_search_types(cls) -> List[Dict]:
+        return [
+            {'value': 'channel', 'label': 'Channel'},
+            {'value': 'search', 'label': 'Search'},
+            {'value': 'video', 'label': 'Video'},
+        ]
+
+    @classmethod
+    def requires_handle(cls) -> bool:
+        return True  # Channel ID or handle
+
+    @classmethod
+    def get_handle_placeholder(cls) -> str:
+        return "UCxxxx or @handle"
+
+    @classmethod
+    def get_handle_label(cls) -> str:
+        return "Channel ID/Handle"
+
+    @classmethod
+    def is_social_media(cls) -> bool:
+        return True
+
+    @classmethod
+    def get_provider_type_value(cls) -> str:
+        return ProviderType.YOUTUBE

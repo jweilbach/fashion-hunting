@@ -203,3 +203,39 @@ class TikTokProvider(ContentProvider):
 
     def get_provider_name(self) -> str:
         return ProviderType.TIKTOK
+
+    # ==========================================
+    # Brand 360 Extended Interface Methods
+    # ==========================================
+
+    @classmethod
+    def get_display_name(cls) -> str:
+        return "TikTok"
+
+    @classmethod
+    def get_search_types(cls) -> List[Dict]:
+        return [
+            {'value': 'user', 'label': 'User'},
+            {'value': 'hashtag', 'label': 'Hashtag'},
+            {'value': 'keyword', 'label': 'Keyword'},
+        ]
+
+    @classmethod
+    def requires_handle(cls) -> bool:
+        return True
+
+    @classmethod
+    def get_handle_placeholder(cls) -> str:
+        return "@username"
+
+    @classmethod
+    def get_handle_label(cls) -> str:
+        return "TikTok Handle"
+
+    @classmethod
+    def is_social_media(cls) -> bool:
+        return True
+
+    @classmethod
+    def get_provider_type_value(cls) -> str:
+        return ProviderType.TIKTOK

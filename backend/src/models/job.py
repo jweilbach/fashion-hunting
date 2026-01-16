@@ -25,6 +25,9 @@ class ScheduledJob(Base):
     # Job settings
     config = Column(JSONB, default=dict)
 
+    # Summary generation (Brand 360)
+    generate_summary = Column(Boolean, default=False)  # Whether to create AI summary after execution
+
     # Execution tracking
     last_run = Column(DateTime(timezone=True))
     last_status = Column(String(50))  # success, failed, running
@@ -52,6 +55,7 @@ class ScheduledJob(Base):
             'schedule_cron': self.schedule_cron,
             'enabled': self.enabled,
             'config': self.config,
+            'generate_summary': self.generate_summary,
             'last_run': self.last_run.isoformat() if self.last_run else None,
             'last_status': self.last_status,
             'last_error': self.last_error,

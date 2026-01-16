@@ -7,6 +7,7 @@ from .report import Report
 from .feed import FeedConfig
 from .job import ScheduledJob, JobExecution
 from .brand import BrandConfig
+from .summary import Summary
 from .user import User
 from .analytics import AnalyticsCache
 from .audit import AuditLog
@@ -23,6 +24,7 @@ __all__ = [
     'ScheduledJob',
     'JobExecution',
     'BrandConfig',
+    'Summary',
     'User',
     'AnalyticsCache',
     'AuditLog',
